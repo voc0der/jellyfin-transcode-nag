@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Transcode Nag</title>
+</head>
+<body>
+    <div id="TranscodeNagConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-checkbox">
+        <div data-role="content">
+            <div class="content-primary">
+                <form id="TranscodeNagConfigForm">
+                    <div class="selectContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="txtNagMessage">Nag Message:</label>
+                        <textarea id="txtNagMessage" name="txtNagMessage" rows="4" class="emby-input"></textarea>
+                        <div class="fieldDescription">Message to display to users who are transcoding due to unsupported formats.</div>
+                    </div>
+
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="txtCheckInterval">Check Interval (seconds):</label>
+                        <input type="number" id="txtCheckInterval" name="txtCheckInterval" min="10" max="600" class="emby-input" />
+                        <div class="fieldDescription">How often to check for transcoding sessions (10-600 seconds).</div>
+                    </div>
+
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="txtMessageTimeout">Message Timeout (ms):</label>
+                        <input type="number" id="txtMessageTimeout" name="txtMessageTimeout" min="3000" max="30000" class="emby-input" />
+                        <div class="fieldDescription">How long the nag message stays visible (3000-30000 ms).</div>
+                    </div>
+
+                    <div class="checkboxContainer checkboxContainer-withDescription">
+                        <label>
+                            <input type="checkbox" is="emby-checkbox" id="chkEnableLogging" name="chkEnableLogging" />
+                            <span>Enable Logging</span>
+                        </label>
+                        <div class="fieldDescription checkboxFieldDescription">Log when nag messages are sent (helpful for debugging).</div>
+                    </div>
+
+                    <div>
+                        <button is="emby-button" type="submit" class="raised button-submit block">
+                            <span>Save</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <script type="text/javascript">
+            var TranscodeNagConfig = {
+                pluginId: "a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d"
+            };
+
+            document.getElementById('TranscodeNagConfigPage').addEventListener('pageshow', function () {
+                Dashboard.showLoadingMsg();
+                ApiClient.getPluginConfiguration(TranscodeNagConfig.pluginId).then(function (config) {
+                    document.getElementById('txtNagMessage').value = config.NagMessage || '';
+                    document.getElementById('txtCheckInterval').value = config.CheckIntervalSeconds || 60;
+                    document.getElementById('txtMessageTimeout').value = config.MessageTimeoutMs || 10000;
+                    document.getElementById('chkEnableLogging').checked = config.EnableLogging || false;
+                    Dashboard.hideLoadingMsg();
+                });
+            });
+
+            document.getElementById('TranscodeNagConfigForm').addEventListener('submit', function (e) {
+                e.preventDefault();
+                Dashboard.showLoadingMsg();
+
+                ApiClient.getPluginConfiguration(TranscodeNagConfig.pluginId).then(function (config) {
+                    config.NagMessage = document.getElementById('txtNagMessage').value;
+                    config.CheckIntervalSeconds = parseInt(document.getElementById('txtCheckInterval').value);
+                    config.MessageTimeoutMs = parseInt(document.getElementById('txtMessageTimeout').value);
+                    config.EnableLogging = document.getElementById('chkEnableLogging').checked;
+
+                    ApiClient.updatePluginConfiguration(TranscodeNagConfig.pluginId, config).then(function (result) {
+                        Dashboard.processPluginConfigurationUpdateResult(result);
+                    });
+                });
+
+                return false;
+            });
+        </script>
+    </div>
+</body>
+</html>
