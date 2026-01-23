@@ -147,7 +147,7 @@ public class TranscodeMonitorService : IHostedService, IDisposable
 
             _sessionManager.SendMessageCommand(
                 null,
-                null,
+                session.Id,
                 new MessageCommand
                 {
                     Header = "Transcoding Detected",
