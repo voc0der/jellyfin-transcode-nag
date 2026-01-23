@@ -95,21 +95,21 @@ jobs:
     - name: Update manifest.json
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       run: |
-        export VERSION=${{ steps.version.outputs.version }}
-        export ZIP_NAME="Transcode_Nag_${VERSION}.zip"
-        export CHECKSUM=$(md5sum "${ZIP_NAME}" | awk '{print $1}')
-        export TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-        export REPO="${{ github.repository }}"
+        VERSION=${{ steps.version.outputs.version }}
+        ZIP_NAME="Transcode_Nag_${VERSION}.zip"
+        CHECKSUM=$(md5sum "${ZIP_NAME}" | awk '{print $1}')
+        TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+        REPO="${{ github.repository }}"
 
-        # Update manifest.json using Python
-        python3 <<PYTHON_SCRIPT
+        # Create Python script to update manifest
+        cat > update_manifest.py << 'EOF'
 import json
-import os
+import sys
 
-version = os.environ.get('VERSION')
-checksum = os.environ.get('CHECKSUM')
-timestamp = os.environ.get('TIMESTAMP')
-repo = os.environ.get('REPO')
+version = sys.argv[1]
+checksum = sys.argv[2]
+timestamp = sys.argv[3]
+repo = sys.argv[4]
 zip_name = f"Transcode_Nag_{version}.zip"
 
 # Read changelog
@@ -138,7 +138,11 @@ with open('manifest.json', 'w') as f:
     json.dump(manifest, f, indent=2)
 
 print(f"Updated manifest.json with version {version}")
-PYTHON_SCRIPT
+EOF
+
+        # Run the Python script
+        python3 update_manifest.py "${VERSION}" "${CHECKSUM}" "${TIMESTAMP}" "${REPO}"
+        rm update_manifest.py
 
     - name: Commit updated manifest
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
