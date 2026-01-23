@@ -70,7 +70,7 @@ public class TranscodeMonitorService : IHostedService, IDisposable
             }
 
             var transcodeInfo = session.TranscodingInfo;
-            if (transcodeInfo == null || !transcodeInfo.IsVideoDirect.HasValue || transcodeInfo.IsVideoDirect.Value)
+            if (transcodeInfo == null || transcodeInfo.IsVideoDirect)
             {
                 // Not transcoding or direct playing
                 if (session.Id != null)
@@ -94,9 +94,11 @@ public class TranscodeMonitorService : IHostedService, IDisposable
 
     private bool ShouldNagSession(TranscodingInfo transcodeInfo)
     {
-        if (transcodeInfo.TranscodeReasons == null || transcodeInfo.TranscodeReasons == TranscodeReason.None)
+        var reasons = transcodeInfo.TranscodeReasons;
+
+        // If no transcode reasons specified, it's likely bitrate limiting - don't nag
+        if ((int)reasons == 0)
         {
-            // Transcoding for other reasons (likely bitrate) - don't nag
             return false;
         }
 
@@ -120,7 +122,7 @@ public class TranscodeMonitorService : IHostedService, IDisposable
             | TranscodeReason.VideoRangeTypeNotSupported
             | TranscodeReason.DirectPlayError;
 
-        return (transcodeInfo.TranscodeReasons & badReasons) != 0;
+        return (reasons & badReasons) != 0;
     }
 
     private void SendNagMessage(SessionInfo session, Configuration.PluginConfiguration config)
@@ -132,7 +134,7 @@ public class TranscodeMonitorService : IHostedService, IDisposable
 
         try
         {
-            var transcodeReasons = session.TranscodingInfo?.TranscodeReasons?.ToString() ?? "Unknown";
+            var transcodeReasons = session.TranscodingInfo?.TranscodeReasons.ToString() ?? "Unknown";
 
             if (config.EnableLogging)
             {
