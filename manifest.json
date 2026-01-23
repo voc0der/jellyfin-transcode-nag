@@ -8,6 +8,14 @@
     "overview": "Smart transcoding monitor that only nags for format/codec incompatibility",
     "versions": [
       {
+        "version": "v1.0.1.1",
+        "changelog": "\"## What's Changed\\n\\n- Use jq for manifest.json updates (1bc7745)\\n- Fix: Use temporary Python file instead of inline heredoc (737fc3d)\\n- Fix: Correct Python heredoc in release workflow (375957b)\\n- Add Jellyfin plugin repository support with proper versioning (38ce74a)\\n\\n**Full Changelog**: https://github.com/voc0der/jellyfin-transcode-nag/compare/v1.0.1...v1.0.1.1\\n\"",
+        "targetAbi": "10.9.0.0",
+        "sourceUrl": "https://github.com/voc0der/jellyfin-transcode-nag/releases/download/v1.0.1.1/Transcode_Nag_v1.0.1.1.zip",
+        "checksum": "4bf4190a72f6b0b631e9fe7224fb7996",
+        "timestamp": "2026-01-23T13:09:42Z"
+      },
+      {
         "version": "1.0.0.0",
         "changelog": "Initial release\n- Smart detection using TranscodeReasons API\n- Configurable messages and intervals\n- Web UI configuration page\n- Background monitoring service",
         "targetAbi": "10.9.0.0",
