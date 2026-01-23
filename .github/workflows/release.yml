@@ -95,52 +95,50 @@ jobs:
     - name: Update manifest.json
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       run: |
-        VERSION=${{ steps.version.outputs.version }}
-        ZIP_NAME="Transcode_Nag_${VERSION}.zip"
-        CHECKSUM=$(md5sum "${ZIP_NAME}" | awk '{print $1}')
-        TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+        export VERSION=${{ steps.version.outputs.version }}
+        export ZIP_NAME="Transcode_Nag_${VERSION}.zip"
+        export CHECKSUM=$(md5sum "${ZIP_NAME}" | awk '{print $1}')
+        export TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+        export REPO="${{ github.repository }}"
 
-        # Read changelog for version entry
-        CHANGELOG_CONTENT=$(cat CHANGELOG.md | sed 's/"/\\"/g' | awk '{printf "%s\\n", $0}')
+        # Update manifest.json using Python
+        python3 <<PYTHON_SCRIPT
+import json
+import os
 
-        # Create new version entry
-        NEW_ENTRY=$(cat <<EOF
-      {
-        "version": "${VERSION}",
-        "changelog": "${CHANGELOG_CONTENT}",
-        "targetAbi": "10.9.0.0",
-        "sourceUrl": "https://github.com/${{ github.repository }}/releases/download/${VERSION}/${ZIP_NAME}",
-        "checksum": "${CHECKSUM}",
-        "timestamp": "${TIMESTAMP}"
-      }
-        EOF
-        )
+version = os.environ.get('VERSION')
+checksum = os.environ.get('CHECKSUM')
+timestamp = os.environ.get('TIMESTAMP')
+repo = os.environ.get('REPO')
+zip_name = f"Transcode_Nag_{version}.zip"
 
-        # Update manifest.json - add new version at the beginning of versions array
-        python3 << 'PYTHON_SCRIPT'
-        import json
-        import sys
+# Read changelog
+with open('CHANGELOG.md', 'r') as f:
+    changelog = f.read()
 
-        with open('manifest.json', 'r') as f:
-            manifest = json.load(f)
+# Read manifest
+with open('manifest.json', 'r') as f:
+    manifest = json.load(f)
 
-        new_version = {
-            "version": "${{ steps.version.outputs.version }}",
-            "changelog": open('CHANGELOG.md').read(),
-            "targetAbi": "10.9.0.0",
-            "sourceUrl": "https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/Transcode_Nag_${{ steps.version.outputs.version }}.zip",
-            "checksum": "$(md5sum Transcode_Nag_${{ steps.version.outputs.version }}.zip | awk '{print $1}')",
-            "timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-        }
+# Create new version entry
+new_version = {
+    "version": version,
+    "changelog": changelog,
+    "targetAbi": "10.9.0.0",
+    "sourceUrl": f"https://github.com/{repo}/releases/download/{version}/{zip_name}",
+    "checksum": checksum,
+    "timestamp": timestamp
+}
 
-        # Add new version at the beginning
-        manifest[0]['versions'].insert(0, new_version)
+# Add new version at the beginning of versions array
+manifest[0]['versions'].insert(0, new_version)
 
-        with open('manifest.json', 'w') as f:
-            json.dump(manifest, f, indent=2)
-        PYTHON_SCRIPT
+# Write updated manifest
+with open('manifest.json', 'w') as f:
+    json.dump(manifest, f, indent=2)
 
-        echo "Updated manifest.json with version ${VERSION}"
+print(f"Updated manifest.json with version {version}")
+PYTHON_SCRIPT
 
     - name: Commit updated manifest
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
