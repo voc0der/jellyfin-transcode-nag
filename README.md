@@ -38,24 +38,24 @@ The plugin nags when transcoding is caused by:
 
 ## Installation
 
-### Method 1: Build from source
+### Method 1: Download Latest Release (Recommended)
+
+1. Download the latest `Jellyfin.Plugin.TranscodeNag.dll` from the [Releases page](https://github.com/voc0der/jellyfin-transcode-nag/releases/latest)
+2. Create a folder called `TranscodeNag` in your Jellyfin plugins directory:
+   - Linux: `/var/lib/jellyfin/plugins/TranscodeNag/`
+   - Windows: `%AppData%\Jellyfin\Server\plugins\TranscodeNag\`
+   - Docker: `/config/plugins/TranscodeNag/`
+3. Copy the DLL into that folder
+4. Restart Jellyfin
+
+### Method 2: Build from source
 
 1. Clone this repository
 2. Build the plugin:
    ```bash
    dotnet build --configuration Release
    ```
-3. Copy `bin/Release/net8.0/Jellyfin.Plugin.TranscodeNag.dll` to your Jellyfin plugins folder:
-   - Linux: `/var/lib/jellyfin/plugins/TranscodeNag/`
-   - Windows: `%AppData%\Jellyfin\Server\plugins\TranscodeNag\`
-   - Docker: `/config/plugins/TranscodeNag/`
-4. Restart Jellyfin
-
-### Method 2: Manual installation
-
-1. Download the latest release DLL
-2. Create a folder called `TranscodeNag` in your Jellyfin plugins directory
-3. Copy the DLL into that folder
+3. Copy `bin/Release/net8.0/Jellyfin.Plugin.TranscodeNag.dll` to your Jellyfin plugins folder (paths above)
 4. Restart Jellyfin
 
 ## Configuration
@@ -82,6 +82,16 @@ Built with:
 - .NET 8.0
 - Jellyfin.Controller 10.9.0
 - Jellyfin.Model 10.9.0
+
+### Automated Releases
+
+Every commit to `main` automatically:
+1. Builds the plugin
+2. Auto-increments the version (semantic versioning)
+3. Generates a changelog from commit messages
+4. Creates a GitHub release with the DLL attached
+
+Check the [Releases page](https://github.com/voc0der/jellyfin-transcode-nag/releases) for all versions and changelogs.
 
 ## License
 
