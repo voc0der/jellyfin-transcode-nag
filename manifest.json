@@ -1,0 +1,20 @@
+[
+  {
+    "category": "General",
+    "guid": "a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d",
+    "name": "Transcode Nag",
+    "description": "Intelligently nags users when they transcode due to unsupported formats/codecs, while allowing bitrate-based transcoding without harassment.",
+    "owner": "voc0der",
+    "overview": "Smart transcoding monitor that only nags for format/codec incompatibility",
+    "versions": [
+      {
+        "version": "1.0.0.0",
+        "changelog": "Initial release\n- Smart detection using TranscodeReasons API\n- Configurable messages and intervals\n- Web UI configuration page\n- Background monitoring service",
+        "targetAbi": "10.9.0.0",
+        "sourceUrl": "https://github.com/voc0der/jellyfin-transcode-nag/releases/download/1.0.0.0/Transcode_Nag_1.0.0.0.zip",
+        "checksum": "PLACEHOLDER",
+        "timestamp": "2026-01-23T00:00:00Z"
+      }
+    ]
+  }
+]

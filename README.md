@@ -38,25 +38,39 @@ The plugin nags when transcoding is caused by:
 
 ## Installation
 
-### Method 1: Download Latest Release (Recommended)
+### Method 1: Add Plugin Repository (Recommended - Auto-Updates!)
 
-1. Download the latest `Jellyfin.Plugin.TranscodeNag.dll` from the [Releases page](https://github.com/voc0der/jellyfin-transcode-nag/releases/latest)
-2. Create a folder called `TranscodeNag` in your Jellyfin plugins directory:
-   - Linux: `/var/lib/jellyfin/plugins/TranscodeNag/`
-   - Windows: `%AppData%\Jellyfin\Server\plugins\TranscodeNag\`
-   - Docker: `/config/plugins/TranscodeNag/`
-3. Copy the DLL into that folder
+1. In Jellyfin, navigate to **Dashboard** → **Plugins** → **Repositories**
+2. Click the **+** button to add a new repository
+3. Enter:
+   - **Repository Name**: `Transcode Nag`
+   - **Repository URL**: `https://raw.githubusercontent.com/voc0der/jellyfin-transcode-nag/main/manifest.json`
+4. Click **Save**
+5. Go to **Catalog** tab, find "Transcode Nag" and click **Install**
+6. Restart Jellyfin
+
+Now you'll get automatic updates whenever a new version is released!
+
+### Method 2: Manual ZIP Installation
+
+1. Download the latest `Transcode_Nag_X.X.X.X.zip` from the [Releases page](https://github.com/voc0der/jellyfin-transcode-nag/releases/latest)
+2. Extract the ZIP to your Jellyfin plugins directory:
+   - Linux: `/var/lib/jellyfin/plugins/`
+   - Windows: `%AppData%\Jellyfin\Server\plugins\`
+   - Docker: `/config/plugins/`
+3. The extracted folder should be named like `Transcode_Nag_1.0.0.1`
 4. Restart Jellyfin
 
-### Method 2: Build from source
+### Method 3: Build from Source
 
 1. Clone this repository
 2. Build the plugin:
    ```bash
    dotnet build --configuration Release
    ```
-3. Copy `bin/Release/net8.0/Jellyfin.Plugin.TranscodeNag.dll` to your Jellyfin plugins folder (paths above)
-4. Restart Jellyfin
+3. Create a versioned folder in your Jellyfin plugins directory (e.g., `Transcode_Nag_1.0.0.0`)
+4. Copy `bin/Release/net8.0/Jellyfin.Plugin.TranscodeNag.dll` into that folder
+5. Restart Jellyfin
 
 ## Configuration
 
@@ -87,11 +101,15 @@ Built with:
 
 Every commit to `main` automatically:
 1. Builds the plugin
-2. Auto-increments the version (semantic versioning)
+2. Auto-increments the version (4-part semantic: 1.0.0.X)
 3. Generates a changelog from commit messages
-4. Creates a GitHub release with the DLL attached
+4. Creates ZIP with proper Jellyfin folder structure (`Transcode_Nag_X.X.X.X/`)
+5. Updates `manifest.json` for plugin repository auto-updates
+6. Creates a GitHub release with the ZIP attached
 
 Check the [Releases page](https://github.com/voc0der/jellyfin-transcode-nag/releases) for all versions and changelogs.
+
+**Plugin Repository URL**: `https://raw.githubusercontent.com/voc0der/jellyfin-transcode-nag/main/manifest.json`
 
 ## License
 

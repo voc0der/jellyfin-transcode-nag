@@ -39,20 +39,20 @@ jobs:
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       id: version
       run: |
-        # Get the latest tag, or use v1.0.0 if none exists
-        LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v1.0.0")
+        # Get the latest tag, or use 1.0.0.0 if none exists
+        LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "1.0.0.0")
         echo "Latest tag: $LATEST_TAG"
 
-        # Extract version numbers
-        VERSION=${LATEST_TAG#v}
-        IFS='.' read -ra VERSION_PARTS <<< "$VERSION"
+        # Extract version numbers (4-part semantic versioning)
+        IFS='.' read -ra VERSION_PARTS <<< "$LATEST_TAG"
         MAJOR=${VERSION_PARTS[0]:-1}
         MINOR=${VERSION_PARTS[1]:-0}
-        PATCH=${VERSION_PARTS[2]:-0}
+        BUILD=${VERSION_PARTS[2]:-0}
+        REVISION=${VERSION_PARTS[3]:-0}
 
-        # Increment patch version
-        PATCH=$((PATCH + 1))
-        NEW_VERSION="v${MAJOR}.${MINOR}.${PATCH}"
+        # Increment revision for each commit
+        REVISION=$((REVISION + 1))
+        NEW_VERSION="${MAJOR}.${MINOR}.${BUILD}.${REVISION}"
 
         echo "New version: $NEW_VERSION"
         echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
@@ -61,7 +61,7 @@ jobs:
         echo "## What's Changed" > CHANGELOG.md
         echo "" >> CHANGELOG.md
 
-        if [ "$LATEST_TAG" != "v1.0.0" ] || git rev-parse "$LATEST_TAG" >/dev/null 2>&1; then
+        if [ "$LATEST_TAG" != "1.0.0.0" ] || git rev-parse "$LATEST_TAG" >/dev/null 2>&1; then
           git log ${LATEST_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges >> CHANGELOG.md
         else
           git log --pretty=format:"- %s (%h)" --no-merges >> CHANGELOG.md
@@ -73,14 +73,93 @@ jobs:
 
         cat CHANGELOG.md
 
+    - name: Package plugin
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      run: |
+        VERSION=${{ steps.version.outputs.version }}
+        FOLDER_NAME="Transcode_Nag_${VERSION}"
+        ZIP_NAME="Transcode_Nag_${VERSION}.zip"
+
+        # Create versioned folder structure
+        mkdir -p "release/${FOLDER_NAME}"
+        cp bin/Release/net8.0/Jellyfin.Plugin.TranscodeNag.dll "release/${FOLDER_NAME}/"
+
+        # Create ZIP
+        cd release
+        zip -r "../${ZIP_NAME}" "${FOLDER_NAME}"
+        cd ..
+
+        echo "Created ${ZIP_NAME}"
+        ls -lh "${ZIP_NAME}"
+
+    - name: Update manifest.json
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      run: |
+        VERSION=${{ steps.version.outputs.version }}
+        ZIP_NAME="Transcode_Nag_${VERSION}.zip"
+        CHECKSUM=$(md5sum "${ZIP_NAME}" | awk '{print $1}')
+        TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+        # Read changelog for version entry
+        CHANGELOG_CONTENT=$(cat CHANGELOG.md | sed 's/"/\\"/g' | awk '{printf "%s\\n", $0}')
+
+        # Create new version entry
+        NEW_ENTRY=$(cat <<EOF
+      {
+        "version": "${VERSION}",
+        "changelog": "${CHANGELOG_CONTENT}",
+        "targetAbi": "10.9.0.0",
+        "sourceUrl": "https://github.com/${{ github.repository }}/releases/download/${VERSION}/${ZIP_NAME}",
+        "checksum": "${CHECKSUM}",
+        "timestamp": "${TIMESTAMP}"
+      }
+        EOF
+        )
+
+        # Update manifest.json - add new version at the beginning of versions array
+        python3 << 'PYTHON_SCRIPT'
+        import json
+        import sys
+
+        with open('manifest.json', 'r') as f:
+            manifest = json.load(f)
+
+        new_version = {
+            "version": "${{ steps.version.outputs.version }}",
+            "changelog": open('CHANGELOG.md').read(),
+            "targetAbi": "10.9.0.0",
+            "sourceUrl": "https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/Transcode_Nag_${{ steps.version.outputs.version }}.zip",
+            "checksum": "$(md5sum Transcode_Nag_${{ steps.version.outputs.version }}.zip | awk '{print $1}')",
+            "timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+        }
+
+        # Add new version at the beginning
+        manifest[0]['versions'].insert(0, new_version)
+
+        with open('manifest.json', 'w') as f:
+            json.dump(manifest, f, indent=2)
+        PYTHON_SCRIPT
+
+        echo "Updated manifest.json with version ${VERSION}"
+
+    - name: Commit updated manifest
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      run: |
+        git config user.name "voc0der"
+        git config user.email "contact@netspace.in"
+        git add manifest.json
+        git commit -m "Update manifest.json for version ${{ steps.version.outputs.version }}" || echo "No changes to commit"
+        git push || echo "No changes to push"
+
     - name: Create Release
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         VERSION=${{ steps.version.outputs.version }}
+        ZIP_NAME="Transcode_Nag_${VERSION}.zip"
 
         gh release create "$VERSION" \
           --title "Release $VERSION" \
           --notes-file CHANGELOG.md \
-          bin/Release/net8.0/Jellyfin.Plugin.TranscodeNag.dll
+          "${ZIP_NAME}"
