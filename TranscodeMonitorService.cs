@@ -16,7 +16,7 @@ public class TranscodeMonitorService : IHostedService, IDisposable
     private readonly ISessionManager _sessionManager;
     private readonly ILogger<TranscodeMonitorService> _logger;
     private Timer? _timer;
-    private readonly HashSet<string> _naggedSessions = new();
+    private readonly HashSet<string> _naggedPlaybacks = new();
 
     public TranscodeMonitorService(
         ISessionManager sessionManager,
@@ -69,24 +69,24 @@ public class TranscodeMonitorService : IHostedService, IDisposable
                 continue;
             }
 
+            // Create unique key for this playback session (session + item)
+            var playbackKey = $"{session.Id}_{session.NowPlayingItem.Id}";
+
             var transcodeInfo = session.TranscodingInfo;
             if (transcodeInfo == null || transcodeInfo.IsVideoDirect)
             {
-                // Not transcoding or direct playing
-                if (session.Id != null)
-                {
-                    _naggedSessions.Remove(session.Id);
-                }
+                // Not transcoding or direct playing - remove this specific playback from nagged list
+                _naggedPlaybacks.Remove(playbackKey);
                 continue;
             }
 
             // Check if transcoding is due to unsupported format/codec
             if (ShouldNagSession(transcodeInfo))
             {
-                if (session.Id != null && !_naggedSessions.Contains(session.Id))
+                if (!_naggedPlaybacks.Contains(playbackKey))
                 {
                     SendNagMessage(session, config);
-                    _naggedSessions.Add(session.Id);
+                    _naggedPlaybacks.Add(playbackKey);
                 }
             }
         }
