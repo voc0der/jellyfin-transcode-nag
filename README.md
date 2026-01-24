@@ -77,18 +77,19 @@ Now you'll get automatic updates whenever a new version is released!
 1. Navigate to **Dashboard** → **Plugins** → **Transcode Nag**
 2. Configure:
    - **Nag Message**: Customize the message shown to users
-   - **Check Interval**: How often to check sessions (default: 60 seconds)
+   - **Delay Before Check**: How long to wait after playback starts before checking (default: 5 seconds)
    - **Message Timeout**: How long the message displays (default: 10000 ms)
    - **Enable Logging**: Log when nag messages are sent
 
 ## How It Works
 
-1. Every `CheckIntervalSeconds`, the plugin checks all active playback sessions
-2. For each session that's transcoding video:
-   - Checks the `TranscodeReasons` flags
+1. Plugin listens for `PlaybackStart` events from Jellyfin
+2. When playback starts, waits `DelaySeconds` for transcoding info to populate
+3. Checks the session's transcoding status:
+   - Examines `TranscodeReasons` flags
    - If any "NotSupported" flags are set, sends a nag message
    - If only bitrate limiting (no flags), does nothing
-3. Tracks which sessions have been nagged to avoid spamming
+4. Tracks which videos have been nagged per session (nags once per video, not per session)
 
 ## Development
 

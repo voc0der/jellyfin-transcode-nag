@@ -7,12 +7,12 @@ using Jellyfin.Data.Enums;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Session;
-using MediaBrowser.Controller.Plugins;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.TranscodeNag;
 
-public class PlaybackMonitor : IServerEntryPoint
+public class PlaybackMonitor : IHostedService
 {
     private readonly ISessionManager _sessionManager;
     private readonly ILogger<PlaybackMonitor> _logger;
@@ -26,11 +26,19 @@ public class PlaybackMonitor : IServerEntryPoint
         _logger = logger;
     }
 
-    public Task RunAsync()
+    public Task StartAsync(CancellationToken cancellationToken)
     {
         _sessionManager.PlaybackStart += OnPlaybackStart;
         _sessionManager.PlaybackStopped += OnPlaybackStopped;
         _logger.LogInformation("PlaybackMonitor started - listening for playback events");
+        return Task.CompletedTask;
+    }
+
+    public Task StopAsync(CancellationToken cancellationToken)
+    {
+        _sessionManager.PlaybackStart -= OnPlaybackStart;
+        _sessionManager.PlaybackStopped -= OnPlaybackStopped;
+        _logger.LogInformation("PlaybackMonitor stopped");
         return Task.CompletedTask;
     }
 
@@ -151,13 +159,5 @@ public class PlaybackMonitor : IServerEntryPoint
         {
             _logger.LogError(ex, "Error sending nag message to session {SessionId}", session.Id);
         }
-    }
-
-    public void Dispose()
-    {
-        _sessionManager.PlaybackStart -= OnPlaybackStart;
-        _sessionManager.PlaybackStopped -= OnPlaybackStopped;
-        _logger.LogInformation("PlaybackMonitor stopped");
-        GC.SuppressFinalize(this);
     }
 }
