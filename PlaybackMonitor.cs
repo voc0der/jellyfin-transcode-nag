@@ -4,91 +4,82 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Data.Enums;
+using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Session;
-using Microsoft.Extensions.Hosting;
+using MediaBrowser.Controller.Plugins;
 using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.TranscodeNag;
 
-public class TranscodeMonitorService : IHostedService, IDisposable
+public class PlaybackMonitor : IServerEntryPoint
 {
     private readonly ISessionManager _sessionManager;
-    private readonly ILogger<TranscodeMonitorService> _logger;
-    private Timer? _timer;
+    private readonly ILogger<PlaybackMonitor> _logger;
     private readonly HashSet<string> _naggedPlaybacks = new();
 
-    public TranscodeMonitorService(
+    public PlaybackMonitor(
         ISessionManager sessionManager,
-        ILogger<TranscodeMonitorService> logger)
+        ILogger<PlaybackMonitor> logger)
     {
         _sessionManager = sessionManager;
         _logger = logger;
     }
 
-    public Task StartAsync(CancellationToken cancellationToken)
+    public Task RunAsync()
     {
-        if (Plugin.Instance == null)
-        {
-            _logger.LogError("Plugin instance is null, cannot start TranscodeMonitorService");
-            return Task.CompletedTask;
-        }
-
-        var interval = Plugin.Instance.Configuration.CheckIntervalSeconds;
-        _timer = new Timer(
-            CheckSessions,
-            null,
-            TimeSpan.Zero,
-            TimeSpan.FromSeconds(interval));
-
-        _logger.LogInformation("TranscodeMonitorService started with {Interval}s interval", interval);
+        _sessionManager.PlaybackStart += OnPlaybackStart;
+        _sessionManager.PlaybackStopped += OnPlaybackStopped;
+        _logger.LogInformation("PlaybackMonitor started - listening for playback events");
         return Task.CompletedTask;
     }
 
-    public Task StopAsync(CancellationToken cancellationToken)
+    private async void OnPlaybackStart(object? sender, PlaybackProgressEventArgs e)
     {
-        _timer?.Change(Timeout.Infinite, 0);
-        _logger.LogInformation("TranscodeMonitorService stopped");
-        return Task.CompletedTask;
-    }
-
-    private void CheckSessions(object? state)
-    {
-        if (Plugin.Instance == null)
+        if (Plugin.Instance == null || e.Session == null)
         {
             return;
         }
 
         var config = Plugin.Instance.Configuration;
-        var sessions = _sessionManager.Sessions;
 
-        foreach (var session in sessions)
+        // Wait for transcoding info to be available
+        await Task.Delay(config.DelaySeconds * 1000).ConfigureAwait(false);
+
+        // Re-fetch session to get updated transcoding info
+        var session = _sessionManager.Sessions.FirstOrDefault(s => s.Id == e.Session.Id);
+        if (session == null || session.NowPlayingItem == null)
         {
-            if (session.NowPlayingItem == null || session.PlayState?.IsPaused == true)
-            {
-                continue;
-            }
+            return;
+        }
 
-            // Create unique key for this playback session (session + item)
-            var playbackKey = $"{session.Id}_{session.NowPlayingItem.Id}";
+        var playbackKey = $"{session.Id}_{session.NowPlayingItem.Id}";
 
-            var transcodeInfo = session.TranscodingInfo;
-            if (transcodeInfo == null || transcodeInfo.IsVideoDirect)
-            {
-                // Not transcoding or direct playing - remove this specific playback from nagged list
-                _naggedPlaybacks.Remove(playbackKey);
-                continue;
-            }
+        var transcodeInfo = session.TranscodingInfo;
+        if (transcodeInfo == null || transcodeInfo.IsVideoDirect)
+        {
+            // Not transcoding - remove from nagged list if present
+            _naggedPlaybacks.Remove(playbackKey);
+            return;
+        }
 
-            // Check if transcoding is due to unsupported format/codec
-            if (ShouldNagSession(transcodeInfo))
+        // Check if transcoding is due to unsupported format/codec
+        if (ShouldNagSession(transcodeInfo))
+        {
+            if (!_naggedPlaybacks.Contains(playbackKey))
             {
-                if (!_naggedPlaybacks.Contains(playbackKey))
-                {
-                    SendNagMessage(session, config);
-                    _naggedPlaybacks.Add(playbackKey);
-                }
+                SendNagMessage(session, config);
+                _naggedPlaybacks.Add(playbackKey);
             }
+        }
+    }
+
+    private void OnPlaybackStopped(object? sender, PlaybackStopEventArgs e)
+    {
+        if (e.Session?.Id != null && e.Item?.Id != null)
+        {
+            var playbackKey = $"{e.Session.Id}_{e.Item.Id}";
+            _naggedPlaybacks.Remove(playbackKey);
         }
     }
 
@@ -164,7 +155,9 @@ public class TranscodeMonitorService : IHostedService, IDisposable
 
     public void Dispose()
     {
-        _timer?.Dispose();
+        _sessionManager.PlaybackStart -= OnPlaybackStart;
+        _sessionManager.PlaybackStopped -= OnPlaybackStopped;
+        _logger.LogInformation("PlaybackMonitor stopped");
         GC.SuppressFinalize(this);
     }
 }

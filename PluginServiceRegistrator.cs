@@ -8,6 +8,6 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
 {
     public void RegisterServices(IServiceCollection serviceCollection, IServerApplicationHost applicationHost)
     {
-        serviceCollection.AddHostedService<TranscodeMonitorService>();
+        serviceCollection.AddSingleton<IServerEntryPoint, PlaybackMonitor>();
     }
 }

@@ -16,9 +16,9 @@
                     </div>
 
                     <div class="inputContainer">
-                        <label class="inputLabel inputLabelUnfocused" for="txtCheckInterval">Check Interval (seconds):</label>
-                        <input type="number" id="txtCheckInterval" name="txtCheckInterval" min="10" max="600" class="emby-input" />
-                        <div class="fieldDescription">How often to check for transcoding sessions (10-600 seconds).</div>
+                        <label class="inputLabel inputLabelUnfocused" for="txtDelaySeconds">Delay Before Check (seconds):</label>
+                        <input type="number" id="txtDelaySeconds" name="txtDelaySeconds" min="1" max="30" class="emby-input" />
+                        <div class="fieldDescription">How long to wait after playback starts before checking transcoding (1-30 seconds).</div>
                     </div>
 
                     <div class="inputContainer">
@@ -53,7 +53,7 @@
                 Dashboard.showLoadingMsg();
                 ApiClient.getPluginConfiguration(TranscodeNagConfig.pluginId).then(function (config) {
                     document.getElementById('txtNagMessage').value = config.NagMessage || '';
-                    document.getElementById('txtCheckInterval').value = config.CheckIntervalSeconds || 60;
+                    document.getElementById('txtDelaySeconds').value = config.DelaySeconds || 5;
                     document.getElementById('txtMessageTimeout').value = config.MessageTimeoutMs || 10000;
                     document.getElementById('chkEnableLogging').checked = config.EnableLogging || false;
                     Dashboard.hideLoadingMsg();
@@ -66,7 +66,7 @@
 
                 ApiClient.getPluginConfiguration(TranscodeNagConfig.pluginId).then(function (config) {
                     config.NagMessage = document.getElementById('txtNagMessage').value;
-                    config.CheckIntervalSeconds = parseInt(document.getElementById('txtCheckInterval').value);
+                    config.DelaySeconds = parseInt(document.getElementById('txtDelaySeconds').value);
                     config.MessageTimeoutMs = parseInt(document.getElementById('txtMessageTimeout').value);
                     config.EnableLogging = document.getElementById('chkEnableLogging').checked;
 
