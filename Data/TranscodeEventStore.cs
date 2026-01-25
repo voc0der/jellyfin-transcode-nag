@@ -36,6 +36,10 @@ public class TranscodeEventStore
         try
         {
             var events = await LoadEventsAsync().ConfigureAwait(false);
+
+            // Maintain invariant: at most 1 improvement credit per user, and it is removed on the next bad transcode.
+            ApplyInMemoryRules(events, transcodeEvent);
+
             events.Add(transcodeEvent);
 
             // Clean up old events (keep last 30 days)
@@ -51,6 +55,75 @@ public class TranscodeEventStore
         finally
         {
             _lock.Release();
+        }
+    }
+
+    /// <summary>
+    /// Get stats used for login/open nags.
+    /// </summary>
+    public async System.Threading.Tasks.Task<UserNagStatus> GetUserNagStatusAsync(string userId, int days)
+    {
+        await _lock.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            var events = await LoadEventsAsync().ConfigureAwait(false);
+            var now = DateTime.UtcNow;
+            var cutoff = now.AddDays(-days);
+
+            var userEvents = events.Where(e => e.UserId == userId).ToList();
+            var recentUserEvents = userEvents.Where(e => e.Timestamp >= cutoff).ToList();
+
+            var badCount = recentUserEvents.Count(e => e.Kind == NagEventKind.BadTranscode);
+
+            var lastBad = userEvents
+                .Where(e => e.Kind == NagEventKind.BadTranscode)
+                .OrderByDescending(e => e.Timestamp)
+                .Select(e => (DateTime?)e.Timestamp)
+                .FirstOrDefault();
+
+            var hasCredit = false;
+            if (lastBad.HasValue)
+            {
+                hasCredit = userEvents.Any(e => e.Kind == NagEventKind.ImprovementCredit && e.Timestamp > lastBad.Value);
+            }
+
+            var lastNag = userEvents
+                .Where(e => e.Kind == NagEventKind.NagSent)
+                .OrderByDescending(e => e.Timestamp)
+                .Select(e => (DateTime?)e.Timestamp)
+                .FirstOrDefault();
+
+            var naggedRecently = lastNag.HasValue && lastNag.Value >= cutoff;
+
+            return new UserNagStatus
+            {
+                UserId = userId,
+                BadTranscodeCount = badCount,
+                HasImprovementCredit = hasCredit,
+                NaggedRecently = naggedRecently,
+                LastBadTranscodeUtc = lastBad,
+                LastNagUtc = lastNag
+            };
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    private void ApplyInMemoryRules(List<TranscodeEvent> events, TranscodeEvent incoming)
+    {
+        // If a user gets an improvement credit, keep only one (the latest).
+        if (incoming.Kind == NagEventKind.ImprovementCredit)
+        {
+            events.RemoveAll(e => e.UserId == incoming.UserId && e.Kind == NagEventKind.ImprovementCredit);
+            return;
+        }
+
+        // If a user bad-transcodes again, remove any previously recorded improvement credit.
+        if (incoming.Kind == NagEventKind.BadTranscode)
+        {
+            events.RemoveAll(e => e.UserId == incoming.UserId && e.Kind == NagEventKind.ImprovementCredit);
         }
     }
 

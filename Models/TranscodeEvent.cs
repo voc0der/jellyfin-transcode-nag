@@ -18,4 +18,9 @@ public class TranscodeEvent
     public TranscodeReason Reasons { get; set; }
 
     public string Client { get; set; } = string.Empty;
+
+    /// <summary>
+    /// What kind of event this is.
+    /// </summary>
+    public NagEventKind Kind { get; set; } = NagEventKind.BadTranscode;
 }

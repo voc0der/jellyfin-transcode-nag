@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using MediaBrowser.Common.Configuration;
@@ -20,7 +21,17 @@ public class PlaybackMonitor : IHostedService
     private readonly ILogger<PlaybackMonitor> _logger;
     private readonly TranscodeEventStore _eventStore;
     private readonly HashSet<string> _naggedPlaybacks = new();
-    private readonly HashSet<string> _naggedLogins = new();
+
+    // "Open Jellyfin" detection for long-lived sessions:
+    // We poll session activity timestamps (via reflection) and treat a large activity jump as a new "open".
+    // This keeps behavior compatible across Jellyfin builds even if the SessionInfo property name changes.
+    private readonly Dictionary<string, DateTime> _sessionLastActivityUtc = new();
+    private readonly object _sessionLastActivityLock = new();
+    private Timer? _sessionPollTimer;
+
+    // If a session goes idle for at least this long and then becomes active again,
+    // treat it as the user "opening" Jellyfin again.
+    private static readonly TimeSpan OpenIdleThreshold = TimeSpan.FromMinutes(10);
 
     public PlaybackMonitor(
         ISessionManager sessionManager,
@@ -38,6 +49,9 @@ public class PlaybackMonitor : IHostedService
         _sessionManager.PlaybackStart += OnPlaybackStart;
         _sessionManager.PlaybackStopped += OnPlaybackStopped;
         _sessionManager.SessionStarted += OnSessionStarted;
+        // Polling is used ONLY to catch re-opens of existing sessions.
+        // (SessionStarted covers fresh sessions.)
+        _sessionPollTimer = new Timer(PollSessionsForReopen, null, TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(30));
         _logger.LogInformation("PlaybackMonitor started - listening for playback and session events");
         return Task.CompletedTask;
     }
@@ -47,8 +61,102 @@ public class PlaybackMonitor : IHostedService
         _sessionManager.PlaybackStart -= OnPlaybackStart;
         _sessionManager.PlaybackStopped -= OnPlaybackStopped;
         _sessionManager.SessionStarted -= OnSessionStarted;
+        _sessionPollTimer?.Dispose();
         _logger.LogInformation("PlaybackMonitor stopped");
         return Task.CompletedTask;
+    }
+
+    private void PollSessionsForReopen(object? state)
+    {
+        if (Plugin.Instance == null)
+        {
+            return;
+        }
+
+        var config = Plugin.Instance.Configuration;
+        if (!config.EnableLoginNag)
+        {
+            return;
+        }
+
+        // If we can't read a last-activity timestamp, polling can't safely infer "reopen".
+        // In that case, SessionStarted still works for fresh sessions.
+        foreach (var session in _sessionManager.Sessions)
+        {
+            if (session.Id == null || session.UserId == null)
+            {
+                continue;
+            }
+
+            var lastActivity = TryGetSessionLastActivityUtc(session);
+            if (!lastActivity.HasValue)
+            {
+                continue;
+            }
+
+            var sessionId = session.Id;
+            var shouldTreatAsOpen = false;
+
+            lock (_sessionLastActivityLock)
+            {
+                if (_sessionLastActivityUtc.TryGetValue(sessionId, out var prev))
+                {
+                    // If the session jumped forward by a lot, consider it a "re-open".
+                    if (lastActivity.Value > prev && (lastActivity.Value - prev) >= OpenIdleThreshold)
+                    {
+                        shouldTreatAsOpen = true;
+                    }
+
+                    _sessionLastActivityUtc[sessionId] = lastActivity.Value;
+                }
+                else
+                {
+                    // First time seeing this session in the poller - treat as open.
+                    _sessionLastActivityUtc[sessionId] = lastActivity.Value;
+                    shouldTreatAsOpen = true;
+                }
+            }
+
+            if (shouldTreatAsOpen)
+            {
+                _ = MaybeSendLoginOrOpenNagAsync(session, config);
+            }
+        }
+    }
+
+    private static DateTime? TryGetSessionLastActivityUtc(SessionInfo session)
+    {
+        try
+        {
+            // Jellyfin SessionInfo commonly exposes LastActivityDate (DateTime) or LastActivityDateUtc.
+            var type = session.GetType();
+            var prop = type.GetProperty("LastActivityDate", BindingFlags.Instance | BindingFlags.Public)
+                       ?? type.GetProperty("LastActivityDateUtc", BindingFlags.Instance | BindingFlags.Public)
+                       ?? type.GetProperty("LastActivity", BindingFlags.Instance | BindingFlags.Public);
+
+            if (prop == null)
+            {
+                return null;
+            }
+
+            var value = prop.GetValue(session);
+            if (value is DateTime dt)
+            {
+                return dt.Kind == DateTimeKind.Utc ? dt : dt.ToUniversalTime();
+            }
+
+            if (value is DateTime? ndt && ndt.HasValue)
+            {
+                var d = ndt.Value;
+                return d.Kind == DateTimeKind.Utc ? d : d.ToUniversalTime();
+            }
+
+            return null;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private async void OnPlaybackStart(object? sender, PlaybackProgressEventArgs e)
@@ -75,6 +183,10 @@ public class PlaybackMonitor : IHostedService
         var transcodeInfo = session.TranscodingInfo;
         if (transcodeInfo == null || transcodeInfo.IsVideoDirect)
         {
+            // Good playback (direct play / direct stream) - record a credit so users don't get dinged
+            // on login/open nags until the next bad transcode.
+            RecordImprovementCreditIfNeeded(session);
+
             // Not transcoding - remove from nagged list if present
             _naggedPlaybacks.Remove(playbackKey);
             return;
@@ -188,10 +300,59 @@ public class PlaybackMonitor : IHostedService
             ItemName = session.NowPlayingItem.Name ?? "Unknown",
             Timestamp = DateTime.UtcNow,
             Reasons = transcodeInfo.TranscodeReasons,
-            Client = session.Client ?? "Unknown"
+            Client = session.Client ?? "Unknown",
+            Kind = NagEventKind.BadTranscode
         };
 
         _eventStore.AddEvent(transcodeEvent);
+    }
+
+    private void RecordImprovementCreditIfNeeded(SessionInfo session)
+    {
+        if (session.UserId == null || session.NowPlayingItem == null)
+        {
+            return;
+        }
+
+        // Only record a credit if the user has had at least one bad transcode recently.
+        // This keeps events.json from growing rapidly for users who already direct play everything.
+        try
+        {
+            // Fire-and-forget: GetUserNagStatusAsync takes a lock and reads the file.
+            _ = Task.Run(async () =>
+            {
+                var status = await _eventStore.GetUserNagStatusAsync(session.UserId.ToString(), 30).ConfigureAwait(false);
+
+                if (!status.LastBadTranscodeUtc.HasValue)
+                {
+                    return;
+                }
+
+                // If they already have an improvement credit after their most recent bad transcode, don't add another.
+                if (status.HasImprovementCredit)
+                {
+                    return;
+                }
+
+                var creditEvent = new TranscodeEvent
+                {
+                    UserId = session.UserId.ToString(),
+                    UserName = session.UserName ?? "Unknown",
+                    ItemId = session.NowPlayingItem.Id.ToString(),
+                    ItemName = session.NowPlayingItem.Name ?? "Unknown",
+                    Timestamp = DateTime.UtcNow,
+                    Reasons = 0,
+                    Client = session.Client ?? "Unknown",
+                    Kind = NagEventKind.ImprovementCredit
+                };
+
+                _eventStore.AddEvent(creditEvent);
+            });
+        }
+        catch
+        {
+            // ignore
+        }
     }
 
     private async void OnSessionStarted(object? sender, SessionEventArgs e)
@@ -208,57 +369,92 @@ public class PlaybackMonitor : IHostedService
             return;
         }
 
-        var userId = e.SessionInfo.UserId.ToString();
-
-        // Check if we've already nagged this user in this session
-        if (_naggedLogins.Contains(userId))
-        {
-            return;
-        }
-
         // Wait a moment for session to fully initialize
         await Task.Delay(2000).ConfigureAwait(false);
 
         try
         {
-            // Calculate days based on time window setting
-            var days = config.LoginNagTimeWindow == "Month" ? 30 : 7;
-            var timeWindowText = config.LoginNagTimeWindow == "Month" ? "month" : "week";
-
-            var events = await _eventStore.GetUserEventsAsync(userId, days).ConfigureAwait(false);
-
-            if (events.Count >= config.LoginNagThreshold)
-            {
-                var message = config.LoginNagMessage
-                    .Replace("{{transcodes}}", events.Count.ToString())
-                    .Replace("{{timewindow}}", timeWindowText);
-
-                if (config.EnableLogging)
-                {
-                    _logger.LogInformation(
-                        "Sending login nag to user {UserId} - {Count} bad transcodes in last {TimeWindow}",
-                        userId,
-                        events.Count,
-                        timeWindowText);
-                }
-
-                _sessionManager.SendMessageCommand(
-                    null,
-                    e.SessionInfo.Id,
-                    new MessageCommand
-                    {
-                        Header = "Transcoding Alert",
-                        Text = message,
-                        TimeoutMs = config.MessageTimeoutMs
-                    },
-                    CancellationToken.None);
-
-                _naggedLogins.Add(userId);
-            }
+            await MaybeSendLoginOrOpenNagAsync(e.SessionInfo, config).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error checking login nag for user {UserId}", userId);
+            _logger.LogError(ex, "Error handling session-start login nag");
         }
+    }
+
+    private async Task MaybeSendLoginOrOpenNagAsync(SessionInfo session, Configuration.PluginConfiguration config)
+    {
+        if (session.Id == null || session.UserId == null)
+        {
+            return;
+        }
+
+        if (!config.EnableLoginNag)
+        {
+            return;
+        }
+
+        var userId = session.UserId.ToString();
+
+        // Calculate days based on time window setting
+        var days = config.LoginNagTimeWindow == "Month" ? 30 : 7;
+        var timeWindowText = config.LoginNagTimeWindow == "Month" ? "month" : "week";
+
+        var status = await _eventStore.GetUserNagStatusAsync(userId, days).ConfigureAwait(false);
+
+        // Rate limit: only once per configured period.
+        if (status.NaggedRecently)
+        {
+            return;
+        }
+
+        // If they demonstrated improvement (a direct play/stream) after their last bad transcode,
+        // don't ding them again until they regress with another bad transcode.
+        if (status.HasImprovementCredit)
+        {
+            return;
+        }
+
+        if (status.BadTranscodeCount < config.LoginNagThreshold)
+        {
+            return;
+        }
+
+        var message = config.LoginNagMessage
+            .Replace("{{transcodes}}", status.BadTranscodeCount.ToString())
+            .Replace("{{timewindow}}", timeWindowText);
+
+        if (config.EnableLogging)
+        {
+            _logger.LogInformation(
+                "Sending login/open nag to user {UserId} - {Count} bad transcodes in last {TimeWindow}",
+                userId,
+                status.BadTranscodeCount,
+                timeWindowText);
+        }
+
+        _sessionManager.SendMessageCommand(
+            null,
+            session.Id,
+            new MessageCommand
+            {
+                Header = "Transcoding Alert",
+                Text = message,
+                TimeoutMs = config.MessageTimeoutMs
+            },
+            CancellationToken.None);
+
+        // Persist the rate-limit marker.
+        _eventStore.AddEvent(new TranscodeEvent
+        {
+            UserId = userId,
+            UserName = session.UserName ?? "Unknown",
+            ItemId = session.NowPlayingItem?.Id.ToString() ?? string.Empty,
+            ItemName = session.NowPlayingItem?.Name ?? string.Empty,
+            Timestamp = DateTime.UtcNow,
+            Reasons = 0,
+            Client = session.Client ?? "Unknown",
+            Kind = NagEventKind.NagSent
+        });
     }
 }
