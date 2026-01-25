@@ -8,6 +8,14 @@
     "overview": "Smart transcoding monitor that only nags for format/codec incompatibility",
     "versions": [
       {
+        "version": "v1.0.1.5",
+        "changelog": "\"## What's Changed\\n\\n- Use DI Correct typing. (2a2eced)\\n- Fix: Use MediaBrowser.Model.Session namespace for TranscodeReason (015a35c)\\n- Fix: Add Jellyfin.Data package reference for TranscodeReason type (828f9bc)\\n- Refactor login nag to use week/month dropdown and template placeholders (1c7726f)\\n- Add login nag feature with transcode history tracking (5c6a96c)\\n\\n**Full Changelog**: https://github.com/voc0der/jellyfin-transcode-nag/compare/v1.0.1.4...v1.0.1.5\\n\"",
+        "targetAbi": "10.9.0.0",
+        "sourceUrl": "https://github.com/voc0der/jellyfin-transcode-nag/releases/download/v1.0.1.5/Transcode_Nag_v1.0.1.5.zip",
+        "checksum": "fb0c51a554e67ac7356b5796218c0163",
+        "timestamp": "2026-01-25T16:40:50Z"
+      },
+      {
         "version": "v1.0.1.4",
         "changelog": "\"## What's Changed\\n\\n- Fix: Use IHostedService instead of IServerEntryPoint (6ee2f90)\\n- Refactor: Switch from polling to event-driven playback monitoring (f75d62b)\\n\\n**Full Changelog**: https://github.com/voc0der/jellyfin-transcode-nag/compare/v1.0.1.3...v1.0.1.4\\n\"",
         "targetAbi": "10.9.0.0",
