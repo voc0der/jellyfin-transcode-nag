@@ -145,12 +145,6 @@ public class PlaybackMonitor : IHostedService
                 return dt.Kind == DateTimeKind.Utc ? dt : dt.ToUniversalTime();
             }
 
-            if (value is DateTime? ndt && ndt.HasValue)
-            {
-                var d = ndt.Value;
-                return d.Kind == DateTimeKind.Utc ? d : d.ToUniversalTime();
-            }
-
             return null;
         }
         catch
