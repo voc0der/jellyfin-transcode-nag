@@ -25,11 +25,12 @@ public class PlaybackMonitor : IHostedService
     public PlaybackMonitor(
         ISessionManager sessionManager,
         IApplicationPaths applicationPaths,
-        ILogger<PlaybackMonitor> logger)
+        ILogger<PlaybackMonitor> logger,
+        ILogger<TranscodeEventStore> eventStoreLogger)
     {
         _sessionManager = sessionManager;
         _logger = logger;
-        _eventStore = new TranscodeEventStore(applicationPaths, logger);
+       _eventStore = new TranscodeEventStore(applicationPaths, eventStoreLogger);
     }
 
     public Task StartAsync(CancellationToken cancellationToken)
