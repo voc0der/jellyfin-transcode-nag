@@ -221,21 +221,25 @@ public class PlaybackMonitor : IHostedService
 
         try
         {
-            var events = await _eventStore.GetUserEventsAsync(userId, config.LoginNagDays).ConfigureAwait(false);
+            // Calculate days based on time window setting
+            var days = config.LoginNagTimeWindow == "Month" ? 30 : 7;
+            var timeWindowText = config.LoginNagTimeWindow == "Month" ? "month" : "week";
+
+            var events = await _eventStore.GetUserEventsAsync(userId, days).ConfigureAwait(false);
 
             if (events.Count >= config.LoginNagThreshold)
             {
                 var message = config.LoginNagMessage
-                    .Replace("{count}", events.Count.ToString())
-                    .Replace("{days}", config.LoginNagDays.ToString());
+                    .Replace("{{transcodes}}", events.Count.ToString())
+                    .Replace("{{timewindow}}", timeWindowText);
 
                 if (config.EnableLogging)
                 {
                     _logger.LogInformation(
-                        "Sending login nag to user {UserId} - {Count} bad transcodes in {Days} days",
+                        "Sending login nag to user {UserId} - {Count} bad transcodes in last {TimeWindow}",
                         userId,
                         events.Count,
-                        config.LoginNagDays);
+                        timeWindowText);
                 }
 
                 _sessionManager.SendMessageCommand(

@@ -51,16 +51,19 @@
                         <div class="fieldDescription">Nag user if they've transcoded this many videos.</div>
                     </div>
 
-                    <div class="inputContainer">
-                        <label class="inputLabel inputLabelUnfocused" for="txtLoginNagDays">Login Nag Time Window (days):</label>
-                        <input type="number" id="txtLoginNagDays" name="txtLoginNagDays" min="1" max="90" class="emby-input" />
-                        <div class="fieldDescription">Check transcode history for the last X days.</div>
+                    <div class="selectContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="selectLoginNagTimeWindow">Login Nag Time Window:</label>
+                        <select id="selectLoginNagTimeWindow" name="selectLoginNagTimeWindow" class="emby-select">
+                            <option value="Week">Week</option>
+                            <option value="Month">Month</option>
+                        </select>
+                        <div class="fieldDescription">Check transcode history for the last week or month.</div>
                     </div>
 
                     <div class="selectContainer">
                         <label class="inputLabel inputLabelUnfocused" for="txtLoginNagMessage">Login Nag Message:</label>
                         <textarea id="txtLoginNagMessage" name="txtLoginNagMessage" rows="3" class="emby-input"></textarea>
-                        <div class="fieldDescription">Message shown on login. Use {count} for transcode count and {days} for time window.</div>
+                        <div class="fieldDescription">Message shown on login. Use {{transcodes}} for transcode count and {{timewindow}} for time window.</div>
                     </div>
 
                     <div>
@@ -86,7 +89,7 @@
                     document.getElementById('chkEnableLogging').checked = config.EnableLogging || false;
                     document.getElementById('chkEnableLoginNag').checked = config.EnableLoginNag !== false;
                     document.getElementById('txtLoginNagThreshold').value = config.LoginNagThreshold || 5;
-                    document.getElementById('txtLoginNagDays').value = config.LoginNagDays || 7;
+                    document.getElementById('selectLoginNagTimeWindow').value = config.LoginNagTimeWindow || 'Week';
                     document.getElementById('txtLoginNagMessage').value = config.LoginNagMessage || '';
                     Dashboard.hideLoadingMsg();
                 });
@@ -103,7 +106,7 @@
                     config.EnableLogging = document.getElementById('chkEnableLogging').checked;
                     config.EnableLoginNag = document.getElementById('chkEnableLoginNag').checked;
                     config.LoginNagThreshold = parseInt(document.getElementById('txtLoginNagThreshold').value);
-                    config.LoginNagDays = parseInt(document.getElementById('txtLoginNagDays').value);
+                    config.LoginNagTimeWindow = document.getElementById('selectLoginNagTimeWindow').value;
                     config.LoginNagMessage = document.getElementById('txtLoginNagMessage').value;
 
                     ApiClient.updatePluginConfiguration(TranscodeNagConfig.pluginId, config).then(function (result) {

@@ -1,5 +1,7 @@
 # Jellyfin Transcode Nag Plugin
 
+[![Star History Chart](https://api.star-history.com/svg?repos=voc0der/jellyfin-transcode-nag&type=Date)](https://star-history.com/#voc0der/jellyfin-transcode-nag&Date)
+
 A Jellyfin plugin that intelligently nags users when they're transcoding due to **unsupported formats or codecs**, while allowing bitrate-based transcoding to pass through without harassment.
 
 ## Why This Plugin?
@@ -12,12 +14,25 @@ This plugin only bothers users when they could fix the issue by using a better c
 
 ## Features
 
-- Monitors active playback sessions
+### Real-Time Playback Monitoring
+- Monitors active playback sessions in real-time
 - Detects transcoding reasons using Jellyfin's `TranscodeReasons` API
 - Only nags when transcoding is due to format/codec incompatibility
-- Configurable check interval, message text, and timeout
+- Nags once per video (not per session)
+- Configurable delay, message text, and timeout
+
+### Login Nag System
+- Tracks transcode history persistently (stored in plugin data directory)
+- Nags users on login if they've exceeded a configurable threshold
+- Configurable time window (week or month)
+- Customizable message with `{{transcodes}}` and `{{timewindow}}` placeholders
+- Can be enabled/disabled independently from playback nags
+- Auto-cleanup of events older than 30 days
+
+### General
 - Web UI configuration page
 - Logging support for debugging
+- Event-driven architecture (no polling)
 
 ## Transcoding Reasons That Trigger Nags
 
@@ -75,21 +90,42 @@ Now you'll get automatic updates whenever a new version is released!
 ## Configuration
 
 1. Navigate to **Dashboard** → **Plugins** → **Transcode Nag**
-2. Configure:
-   - **Nag Message**: Customize the message shown to users
-   - **Delay Before Check**: How long to wait after playback starts before checking (default: 5 seconds)
-   - **Message Timeout**: How long the message displays (default: 10000 ms)
-   - **Enable Logging**: Log when nag messages are sent
+2. Configure the settings:
+
+### Playback Nag Settings
+- **Nag Message**: Customize the message shown during playback when transcoding is detected
+- **Delay Before Check**: How long to wait after playback starts before checking (1-30 seconds, default: 5)
+- **Message Timeout**: How long the message displays in milliseconds (3000-30000 ms, default: 10000)
+- **Enable Logging**: Log when nag messages are sent (helpful for debugging)
+
+### Login Nag Settings
+- **Enable Login Nag**: Toggle to enable/disable the login nag feature
+- **Login Nag Threshold**: Number of bad transcodes before nagging (1-100, default: 5)
+- **Login Nag Time Window**: Check history for the last week or month (dropdown)
+- **Login Nag Message**: Customize the message shown on login
+  - Use `{{transcodes}}` placeholder for the transcode count
+  - Use `{{timewindow}}` placeholder for "week" or "month"
+  - Default: "You've transcoded {{transcodes}} videos in the last {{timewindow}} due to unsupported formats. Consider switching to mpv, VLC, or Jellyfin Media Player to improve quality and reduce server load!"
 
 ## How It Works
 
+### Playback Monitoring
 1. Plugin listens for `PlaybackStart` events from Jellyfin
 2. When playback starts, waits `DelaySeconds` for transcoding info to populate
 3. Checks the session's transcoding status:
    - Examines `TranscodeReasons` flags
-   - If any "NotSupported" flags are set, sends a nag message
+   - If any "NotSupported" flags are set, sends a nag message and records the event
    - If only bitrate limiting (no flags), does nothing
 4. Tracks which videos have been nagged per session (nags once per video, not per session)
+5. When playback stops, clears the nag tracking for that video
+
+### Login Nag System
+1. Plugin listens for `SessionStarted` events (user login)
+2. Queries the persistent event store for the user's transcode history
+3. Calculates days based on time window setting (7 for week, 30 for month)
+4. If transcode count >= threshold, sends a login nag message
+5. Tracks which users have been nagged to avoid duplicate messages during the same session
+6. Events older than 30 days are automatically cleaned up to save storage
 
 ## Development
 

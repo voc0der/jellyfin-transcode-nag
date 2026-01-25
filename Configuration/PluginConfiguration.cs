@@ -16,7 +16,7 @@ public class PluginConfiguration : BasePluginConfiguration
 
     public int LoginNagThreshold { get; set; } = 5;
 
-    public int LoginNagDays { get; set; } = 7;
+    public string LoginNagTimeWindow { get; set; } = "Week";
 
-    public string LoginNagMessage { get; set; } = "You've transcoded {count} videos in the last {days} days due to unsupported formats. Consider switching to mpv, VLC, or Jellyfin Media Player to improve quality and reduce server load!";
+    public string LoginNagMessage { get; set; } = "You've transcoded {{transcodes}} videos in the last {{timewindow}} due to unsupported formats. Consider switching to mpv, VLC, or Jellyfin Media Player to improve quality and reduce server load!";
 }
