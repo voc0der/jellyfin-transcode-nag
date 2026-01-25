@@ -11,4 +11,12 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool EnableLogging { get; set; } = true;
 
     public int DelaySeconds { get; set; } = 5;
+
+    public bool EnableLoginNag { get; set; } = true;
+
+    public int LoginNagThreshold { get; set; } = 5;
+
+    public int LoginNagDays { get; set; } = 7;
+
+    public string LoginNagMessage { get; set; } = "You've transcoded {count} videos in the last {days} days due to unsupported formats. Consider switching to mpv, VLC, or Jellyfin Media Player to improve quality and reduce server load!";
 }

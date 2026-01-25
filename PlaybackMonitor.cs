@@ -4,6 +4,9 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Data.Enums;
+using Jellyfin.Plugin.TranscodeNag.Data;
+using Jellyfin.Plugin.TranscodeNag.Models;
+using MediaBrowser.Common.Configuration;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Session;
@@ -16,21 +19,26 @@ public class PlaybackMonitor : IHostedService
 {
     private readonly ISessionManager _sessionManager;
     private readonly ILogger<PlaybackMonitor> _logger;
+    private readonly TranscodeEventStore _eventStore;
     private readonly HashSet<string> _naggedPlaybacks = new();
+    private readonly HashSet<string> _naggedLogins = new();
 
     public PlaybackMonitor(
         ISessionManager sessionManager,
+        IApplicationPaths applicationPaths,
         ILogger<PlaybackMonitor> logger)
     {
         _sessionManager = sessionManager;
         _logger = logger;
+        _eventStore = new TranscodeEventStore(applicationPaths, logger);
     }
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
         _sessionManager.PlaybackStart += OnPlaybackStart;
         _sessionManager.PlaybackStopped += OnPlaybackStopped;
-        _logger.LogInformation("PlaybackMonitor started - listening for playback events");
+        _sessionManager.SessionStarted += OnSessionStarted;
+        _logger.LogInformation("PlaybackMonitor started - listening for playback and session events");
         return Task.CompletedTask;
     }
 
@@ -38,6 +46,7 @@ public class PlaybackMonitor : IHostedService
     {
         _sessionManager.PlaybackStart -= OnPlaybackStart;
         _sessionManager.PlaybackStopped -= OnPlaybackStopped;
+        _sessionManager.SessionStarted -= OnSessionStarted;
         _logger.LogInformation("PlaybackMonitor stopped");
         return Task.CompletedTask;
     }
@@ -74,6 +83,9 @@ public class PlaybackMonitor : IHostedService
         // Check if transcoding is due to unsupported format/codec
         if (ShouldNagSession(transcodeInfo))
         {
+            // Record the event
+            RecordTranscodeEvent(session, transcodeInfo);
+
             if (!_naggedPlaybacks.Contains(playbackKey))
             {
                 SendNagMessage(session, config);
@@ -158,6 +170,91 @@ public class PlaybackMonitor : IHostedService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error sending nag message to session {SessionId}", session.Id);
+        }
+    }
+
+    private void RecordTranscodeEvent(SessionInfo session, TranscodingInfo transcodeInfo)
+    {
+        if (session.UserId == null || session.NowPlayingItem == null)
+        {
+            return;
+        }
+
+        var transcodeEvent = new TranscodeEvent
+        {
+            UserId = session.UserId.ToString(),
+            UserName = session.UserName ?? "Unknown",
+            ItemId = session.NowPlayingItem.Id.ToString(),
+            ItemName = session.NowPlayingItem.Name ?? "Unknown",
+            Timestamp = DateTime.UtcNow,
+            Reasons = transcodeInfo.TranscodeReasons,
+            Client = session.Client ?? "Unknown"
+        };
+
+        _eventStore.AddEvent(transcodeEvent);
+    }
+
+    private async void OnSessionStarted(object? sender, SessionEventArgs e)
+    {
+        if (Plugin.Instance == null || e.SessionInfo?.UserId == null)
+        {
+            return;
+        }
+
+        var config = Plugin.Instance.Configuration;
+
+        if (!config.EnableLoginNag)
+        {
+            return;
+        }
+
+        var userId = e.SessionInfo.UserId.ToString();
+
+        // Check if we've already nagged this user in this session
+        if (_naggedLogins.Contains(userId))
+        {
+            return;
+        }
+
+        // Wait a moment for session to fully initialize
+        await Task.Delay(2000).ConfigureAwait(false);
+
+        try
+        {
+            var events = await _eventStore.GetUserEventsAsync(userId, config.LoginNagDays).ConfigureAwait(false);
+
+            if (events.Count >= config.LoginNagThreshold)
+            {
+                var message = config.LoginNagMessage
+                    .Replace("{count}", events.Count.ToString())
+                    .Replace("{days}", config.LoginNagDays.ToString());
+
+                if (config.EnableLogging)
+                {
+                    _logger.LogInformation(
+                        "Sending login nag to user {UserId} - {Count} bad transcodes in {Days} days",
+                        userId,
+                        events.Count,
+                        config.LoginNagDays);
+                }
+
+                _sessionManager.SendMessageCommand(
+                    null,
+                    e.SessionInfo.Id,
+                    new MessageCommand
+                    {
+                        Header = "Transcoding Alert",
+                        Text = message,
+                        TimeoutMs = config.MessageTimeoutMs
+                    },
+                    CancellationToken.None);
+
+                _naggedLogins.Add(userId);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error checking login nag for user {UserId}", userId);
         }
     }
 }
