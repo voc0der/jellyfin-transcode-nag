@@ -3,15 +3,14 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Jellyfin.Data.Enums;
-using Jellyfin.Plugin.TranscodeNag.Data;
-using Jellyfin.Plugin.TranscodeNag.Models;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Session;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Jellyfin.Plugin.TranscodeNag.Data;
+using Jellyfin.Plugin.TranscodeNag.Models;
 
 namespace Jellyfin.Plugin.TranscodeNag;
 

@@ -1,5 +1,5 @@
 using System;
-using Jellyfin.Data.Enums;
+using MediaBrowser.Model.Session;
 
 namespace Jellyfin.Plugin.TranscodeNag.Models;
 
