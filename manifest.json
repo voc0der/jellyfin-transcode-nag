@@ -8,6 +8,14 @@
     "overview": "Smart transcoding monitor that only nags for format/codec incompatibility",
     "versions": [
       {
+        "version": "v1.0.1.6",
+        "changelog": "\"## What's Changed\\n\\n- Fix nullable pattern in session activity (f034f18)\\n- Add login nag tracking and event kinds (e740dfa)\\n\\n**Full Changelog**: https://github.com/voc0der/jellyfin-transcode-nag/compare/v1.0.1.5...v1.0.1.6\\n\"",
+        "targetAbi": "10.9.0.0",
+        "sourceUrl": "https://github.com/voc0der/jellyfin-transcode-nag/releases/download/v1.0.1.6/Transcode_Nag_v1.0.1.6.zip",
+        "checksum": "d5d61dcd86ba603c0aedc1489efea0c4",
+        "timestamp": "2026-01-25T17:01:31Z"
+      },
+      {
         "version": "v1.0.1.5",
         "changelog": "\"## What's Changed\\n\\n- Use DI Correct typing. (2a2eced)\\n- Fix: Use MediaBrowser.Model.Session namespace for TranscodeReason (015a35c)\\n- Fix: Add Jellyfin.Data package reference for TranscodeReason type (828f9bc)\\n- Refactor login nag to use week/month dropdown and template placeholders (1c7726f)\\n- Add login nag feature with transcode history tracking (5c6a96c)\\n\\n**Full Changelog**: https://github.com/voc0der/jellyfin-transcode-nag/compare/v1.0.1.4...v1.0.1.5\\n\"",
         "targetAbi": "10.9.0.0",
