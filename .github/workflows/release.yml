@@ -96,13 +96,15 @@ jobs:
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       run: |
         VERSION=${{ steps.version.outputs.version }}
+        # Strip 'v' prefix for manifest.json version field (Jellyfin requires semantic version without 'v')
+        MANIFEST_VERSION="${VERSION#v}"
         ZIP_NAME="Transcode_Nag_${VERSION}.zip"
         CHECKSUM=$(md5sum "${ZIP_NAME}" | awk '{print $1}')
         TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
         REPO="${{ github.repository }}"
         CHANGELOG=$(cat CHANGELOG.md | jq -Rs .)
 
-        jq --arg version "$VERSION" \
+        jq --arg version "$MANIFEST_VERSION" \
            --arg changelog "$CHANGELOG" \
            --arg checksum "$CHECKSUM" \
            --arg timestamp "$TIMESTAMP" \

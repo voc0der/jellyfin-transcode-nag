@@ -76,7 +76,8 @@ Now you'll get automatic updates whenever a new version is released!
 3. The extracted folder should be named like `Transcode_Nag_1.0.0.1`
 4. Restart Jellyfin
 
-### Method 3: Build from Source
+<details>
+<summary>Method 3: Build from Source</summary>
 
 1. Clone this repository
 2. Build the plugin:
@@ -86,6 +87,8 @@ Now you'll get automatic updates whenever a new version is released!
 3. Create a versioned folder in your Jellyfin plugins directory (e.g., `Transcode_Nag_1.0.0.0`)
 4. Copy `bin/Release/net8.0/Jellyfin.Plugin.TranscodeNag.dll` into that folder
 5. Restart Jellyfin
+
+</details>
 
 ## Configuration
 
