@@ -77,7 +77,9 @@ jobs:
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       run: |
         VERSION=${{ steps.version.outputs.version }}
-        FOLDER_NAME="Transcode_Nag_${VERSION}"
+        # Strip 'v' prefix for folder name (Jellyfin expects folder without 'v')
+        VERSION_NO_V="${VERSION#v}"
+        FOLDER_NAME="Transcode_Nag_${VERSION_NO_V}"
         ZIP_NAME="Transcode_Nag_${VERSION}.zip"
 
         # Create versioned folder structure
