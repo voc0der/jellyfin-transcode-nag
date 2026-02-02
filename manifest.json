@@ -8,6 +8,14 @@
     "overview": "Smart transcoding monitor that only nags for format/codec incompatibility",
     "versions": [
       {
+        "version": "1.0.1.7",
+        "changelog": "\"## What's Changed\\n\\n- Fix: Remove 'v' prefix from manifest versions to prevent plugin page crash (06bc04a)\\n\\n**Full Changelog**: https://github.com/voc0der/jellyfin-transcode-nag/compare/v1.0.1.6...v1.0.1.7\\n\"",
+        "targetAbi": "10.9.0.0",
+        "sourceUrl": "https://github.com/voc0der/jellyfin-transcode-nag/releases/download/v1.0.1.7/Transcode_Nag_v1.0.1.7.zip",
+        "checksum": "7719ee9f191565d0d7e6213cd9f9df89",
+        "timestamp": "2026-02-02T10:51:29Z"
+      },
+      {
         "version": "1.0.1.6",
         "changelog": "\"## What's Changed\\n\\n- Fix nullable pattern in session activity (f034f18)\\n- Add login nag tracking and event kinds (e740dfa)\\n\\n**Full Changelog**: https://github.com/voc0der/jellyfin-transcode-nag/compare/v1.0.1.5...v1.0.1.6\\n\"",
         "targetAbi": "10.9.0.0",
