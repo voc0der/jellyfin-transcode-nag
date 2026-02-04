@@ -242,10 +242,40 @@ public class PlaybackMonitor : IHostedService
         return (reasons & badReasons) != 0;
     }
 
+    private bool IsUserExcluded(Guid? userId)
+    {
+        if (userId == null || Plugin.Instance == null)
+        {
+            return false;
+        }
+
+        var config = Plugin.Instance.Configuration;
+        if (config.ExcludedUserIds == null || config.ExcludedUserIds.Length == 0)
+        {
+            return false;
+        }
+
+        var userIdString = userId.ToString();
+        return Array.IndexOf(config.ExcludedUserIds, userIdString) >= 0;
+    }
+
     private void SendNagMessage(SessionInfo session, Configuration.PluginConfiguration config)
     {
         if (session.Id == null)
         {
+            return;
+        }
+
+        // Check if user is excluded from nag messages
+        if (IsUserExcluded(session.UserId))
+        {
+            if (config.EnableLogging)
+            {
+                _logger.LogInformation(
+                    "Skipping nag for excluded user {UserId} ({UserName})",
+                    session.UserId,
+                    session.UserName ?? "Unknown");
+            }
             return;
         }
 
@@ -385,6 +415,18 @@ public class PlaybackMonitor : IHostedService
 
         if (!config.EnableLoginNag)
         {
+            return;
+        }
+
+        // Check if user is excluded from nag messages
+        if (IsUserExcluded(session.UserId))
+        {
+            if (config.EnableLogging)
+            {
+                _logger.LogInformation(
+                    "Skipping login nag for excluded user {UserId}",
+                    session.UserId);
+            }
             return;
         }
 

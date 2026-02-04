@@ -1,3 +1,4 @@
+using System;
 using MediaBrowser.Model.Plugins;
 
 namespace Jellyfin.Plugin.TranscodeNag.Configuration;
@@ -19,4 +20,6 @@ public class PluginConfiguration : BasePluginConfiguration
     public string LoginNagTimeWindow { get; set; } = "Week";
 
     public string LoginNagMessage { get; set; } = "You've transcoded {{transcodes}} videos in the last {{timewindow}} due to unsupported formats. Consider switching to mpv, VLC, or Jellyfin Media Player to improve quality and reduce server load!";
+
+    public string[] ExcludedUserIds { get; set; } = Array.Empty<string>();
 }

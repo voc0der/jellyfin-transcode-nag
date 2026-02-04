@@ -66,12 +66,45 @@
                         <div class="fieldDescription">Message shown on login. Use {{transcodes}} for transcode count and {{timewindow}} for time window.</div>
                     </div>
 
+                    <h2>User Exclusions</h2>
+
+                    <div class="fieldDescription" style="margin-bottom: 10px;">
+                        Exclude specific users from receiving any nag messages (both playback and login).
+                    </div>
+
+                    <div style="margin-bottom: 20px;">
+                        <button is="emby-button" type="button" id="btnManageExclusions" class="raised block emby-button">
+                            <span>Manage Excluded Users</span>
+                        </button>
+                    </div>
+
                     <div>
                         <button is="emby-button" type="submit" class="raised button-submit block">
                             <span>Save</span>
                         </button>
                     </div>
                 </form>
+            </div>
+
+            <!-- User Exclusion Modal -->
+            <div id="userExclusionModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 1000; overflow-y: auto;">
+                <div style="background: var(--theme-background-content); margin: 50px auto; max-width: 600px; padding: 20px; border-radius: 4px;">
+                    <h2>Select Users to Exclude</h2>
+                    <div class="fieldDescription" style="margin-bottom: 15px;">
+                        By default, all users are included. Uncheck users to exclude them from ALL nag messages.
+                    </div>
+                    <div id="userExclusionList" style="max-height: 400px; overflow-y: auto; margin-bottom: 20px;">
+                        <!-- User checkboxes will be populated here -->
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <button is="emby-button" type="button" id="btnSaveExclusions" class="raised button-submit">
+                            <span>Save</span>
+                        </button>
+                        <button is="emby-button" type="button" id="btnCancelExclusions" class="raised">
+                            <span>Cancel</span>
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -115,6 +148,99 @@
                 });
 
                 return false;
+            });
+
+            // User Exclusion Management
+            var UserExclusionManager = {
+                allUsers: [],
+                excludedUserIds: [],
+
+                init: function() {
+                    document.getElementById('btnManageExclusions').addEventListener('click', this.openModal.bind(this));
+                    document.getElementById('btnSaveExclusions').addEventListener('click', this.saveExclusions.bind(this));
+                    document.getElementById('btnCancelExclusions').addEventListener('click', this.closeModal.bind(this));
+                },
+
+                openModal: function() {
+                    Dashboard.showLoadingMsg();
+
+                    // Fetch current exclusion list from config
+                    ApiClient.getPluginConfiguration(TranscodeNagConfig.pluginId).then(function(config) {
+                        UserExclusionManager.excludedUserIds = config.ExcludedUserIds || [];
+
+                        // Fetch all users from Jellyfin
+                        ApiClient.getUsers().then(function(users) {
+                            UserExclusionManager.allUsers = users;
+                            UserExclusionManager.renderUserList();
+                            document.getElementById('userExclusionModal').style.display = 'block';
+                            Dashboard.hideLoadingMsg();
+                        }).catch(function(error) {
+                            console.error('Error fetching users:', error);
+                            Dashboard.alert('Failed to load users. Check console for details.');
+                            Dashboard.hideLoadingMsg();
+                        });
+                    });
+                },
+
+                closeModal: function() {
+                    document.getElementById('userExclusionModal').style.display = 'none';
+                },
+
+                renderUserList: function() {
+                    var listHtml = '';
+
+                    this.allUsers.forEach(function(user) {
+                        var userId = user.Id;
+                        var userName = user.Name;
+                        var isIncluded = UserExclusionManager.excludedUserIds.indexOf(userId) === -1;
+
+                        listHtml += '<div class="checkboxContainer" style="margin-bottom: 10px;">';
+                        listHtml += '<label>';
+                        listHtml += '<input type="checkbox" is="emby-checkbox" data-user-id="' + userId + '" ' + (isIncluded ? 'checked' : '') + ' />';
+                        listHtml += '<span>' + userName + '</span>';
+                        listHtml += '</label>';
+                        listHtml += '</div>';
+                    });
+
+                    document.getElementById('userExclusionList').innerHTML = listHtml;
+                },
+
+                saveExclusions: function() {
+                    Dashboard.showLoadingMsg();
+
+                    // Collect unchecked users (excluded users)
+                    var checkboxes = document.querySelectorAll('#userExclusionList input[type="checkbox"]');
+                    var newExcludedUserIds = [];
+
+                    checkboxes.forEach(function(checkbox) {
+                        if (!checkbox.checked) {
+                            newExcludedUserIds.push(checkbox.getAttribute('data-user-id'));
+                        }
+                    });
+
+                    // Update configuration
+                    ApiClient.getPluginConfiguration(TranscodeNagConfig.pluginId).then(function(config) {
+                        config.ExcludedUserIds = newExcludedUserIds;
+
+                        ApiClient.updatePluginConfiguration(TranscodeNagConfig.pluginId, config).then(function(result) {
+                            UserExclusionManager.excludedUserIds = newExcludedUserIds;
+                            UserExclusionManager.closeModal();
+                            Dashboard.hideLoadingMsg();
+
+                            // Show a subtle notification
+                            if (newExcludedUserIds.length === 0) {
+                                Dashboard.alert('All users are now included in nag messages.');
+                            } else {
+                                Dashboard.alert(newExcludedUserIds.length + ' user(s) excluded from nag messages.');
+                            }
+                        });
+                    });
+                }
+            };
+
+            // Initialize on page show
+            document.getElementById('TranscodeNagConfigPage').addEventListener('pageshow', function() {
+                UserExclusionManager.init();
             });
         </script>
     </div>
