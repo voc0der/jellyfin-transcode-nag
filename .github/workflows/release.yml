@@ -30,7 +30,7 @@ jobs:
       run: dotnet build --configuration Release --no-restore
 
     - name: Upload artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: Jellyfin.Plugin.TranscodeNag
         path: bin/Release/net8.0/Jellyfin.Plugin.TranscodeNag.dll
