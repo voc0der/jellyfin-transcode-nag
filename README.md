@@ -29,6 +29,11 @@ This plugin only bothers users when they could fix the issue by using a better c
 - Can be enabled/disabled independently from playback nags
 - Auto-cleanup of events older than 30 days
 
+### User Exclusions
+- Exclude specific users from **all** nag messages (both playback and login)
+- Manage exclusions via the plugin config page (Dashboard → Plugins → Transcode Nag → Manage Excluded Users)
+- Unchecked users are excluded; checked users receive nags as normal
+
 ### General
 - Web UI configuration page
 - Logging support for debugging
@@ -110,6 +115,12 @@ Now you'll get automatic updates whenever a new version is released!
   - Use `{{timewindow}}` placeholder for "week" or "month"
   - Default: "You've transcoded {{transcodes}} videos in the last {{timewindow}} due to unsupported formats. Consider switching to mpv, VLC, or Jellyfin Media Player to improve quality and reduce server load!"
 
+### User Exclusions
+- Click **Manage Excluded Users** to open the exclusion modal
+- All users are **checked** (included) by default
+- **Uncheck** a user to exclude them from all nag messages
+- Click **Save** in the modal to apply changes
+
 ## How It Works
 
 ### Playback Monitoring
@@ -130,31 +141,10 @@ Now you'll get automatic updates whenever a new version is released!
 5. Tracks which users have been nagged to avoid duplicate messages during the same session
 6. Events older than 30 days are automatically cleaned up to save storage
 
-## Development
+## Contributing
 
-Built with:
-- .NET 8.0
-- Jellyfin.Controller 10.9.0
-- Jellyfin.Model 10.9.0
-
-### Automated Releases
-
-Every commit to `main` automatically:
-1. Builds the plugin
-2. Auto-increments the version (4-part semantic: 1.0.0.X)
-3. Generates a changelog from commit messages
-4. Creates ZIP with proper Jellyfin folder structure (`Transcode_Nag_X.X.X.X/`)
-5. Updates `manifest.json` for plugin repository auto-updates
-6. Creates a GitHub release with the ZIP attached
-
-Check the [Releases page](https://github.com/voc0der/jellyfin-transcode-nag/releases) for all versions and changelogs.
-
-**Plugin Repository URL**: `https://raw.githubusercontent.com/voc0der/jellyfin-transcode-nag/main/manifest.json`
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## License
 
 MIT License
-
-## Contributing
-
-Issues and pull requests welcome!

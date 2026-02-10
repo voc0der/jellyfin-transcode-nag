@@ -255,7 +255,7 @@ public class PlaybackMonitor : IHostedService
             return false;
         }
 
-        var userIdString = userId.ToString();
+        var userIdString = userId.Value.ToString("N");
         return Array.IndexOf(config.ExcludedUserIds, userIdString) >= 0;
     }
 

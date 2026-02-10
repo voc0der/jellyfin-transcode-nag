@@ -1,0 +1,32 @@
+# Contributing to Jellyfin Transcode Nag
+
+Issues and pull requests are welcome!
+
+## Getting Started
+
+1. Fork the repository
+2. Create a feature branch from `main`
+3. Make your changes
+4. Submit a pull request
+
+## Building
+
+```bash
+dotnet build --configuration Release
+```
+
+## Reporting Issues
+
+- Search existing issues before opening a new one
+- Include Jellyfin version, plugin version, and relevant logs
+- Enable the **Enable Logging** option in the plugin config to capture debug info
+
+## Pull Requests
+
+- Keep changes focused and minimal
+- Test against a running Jellyfin instance before submitting
+- Describe what your PR changes and why
+
+## LLM Disclosure
+
+This project uses LLM-assisted development (Claude). Contributions generated with AI assistance are welcome, but please review and test all code before submitting.
