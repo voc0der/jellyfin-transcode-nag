@@ -37,7 +37,7 @@ This plugin only bothers users when they could fix the issue by using a better c
 
 ### General
 - Web UI configuration page
-- Optional sidebar page ("Transcode Nag Live") that lists active sessions matching nag criteria
+- Live session monitor embedded directly in plugin settings
 - Logging support for debugging
 - Event-driven architecture (no polling)
 
@@ -106,7 +106,6 @@ Now you'll get automatic updates whenever a new version is released!
 - **Delay Before Check**: How long to wait after playback starts before checking (1-30 seconds, default: 5)
 - **Message Timeout**: How long the message displays in milliseconds (3000-30000 ms, default: 10000)
 - **Enable Logging**: Log when nag messages are sent (helpful for debugging)
-- **Enable Live Sidebar Page**: Show/hide the "Transcode Nag Live" entry in the left sidebar (refresh dashboard after saving)
 - **Playback Trigger Reasons**: Choose which transcoding reasons trigger nag events
   - Use quick actions: **Select All**, **Reset Defaults**, or **Clear All**
 
@@ -126,9 +125,8 @@ Now you'll get automatic updates whenever a new version is released!
 - Use quick actions in the modal: **Select All**, **Reset Defaults**, or **Clear All**
 - Click **Save** in the modal to apply changes
 
-### Live Sidebar Page
-- A **Transcode Nag Live** page can appear in the left sidebar under Plugins
-- Visibility is controlled by **Enable Live Sidebar Page** in plugin settings
+### Live Session Monitor
+- The settings page includes a built-in live monitor section
 - It refreshes every 15 seconds and shows only active sessions matching current nag rules
 - It respects your selected playback trigger reasons and excluded users
 

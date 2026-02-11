@@ -41,8 +41,6 @@ public class PluginConfiguration : BasePluginConfiguration
 
     public int DelaySeconds { get; set; } = 5;
 
-    public bool EnableLiveSidebarPage { get; set; } = true;
-
     public bool EnableLoginNag { get; set; } = true;
 
     public int LoginNagThreshold { get; set; } = 5;

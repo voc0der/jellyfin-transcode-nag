@@ -26,7 +26,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
 
     public IEnumerable<PluginPageInfo> GetPages()
     {
-        var pages = new List<PluginPageInfo>
+        return new[]
         {
             new PluginPageInfo
             {
@@ -34,20 +34,5 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
                 EmbeddedResourcePath = GetType().Namespace + ".Configuration.configPage.html"
             }
         };
-
-        if (Configuration.EnableLiveSidebarPage)
-        {
-            pages.Add(new PluginPageInfo
-            {
-                Name = "TranscodeNagLive",
-                DisplayName = "Transcode Nag Live",
-                EmbeddedResourcePath = GetType().Namespace + ".Configuration.livePage.html",
-                EnableInMainMenu = true,
-                MenuSection = "plugins",
-                MenuIcon = "info"
-            });
-        }
-
-        return pages;
     }
 }

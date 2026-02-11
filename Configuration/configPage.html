@@ -35,14 +35,6 @@
                         <div class="fieldDescription checkboxFieldDescription">Log when nag messages are sent (helpful for debugging).</div>
                     </div>
 
-                    <div class="checkboxContainer checkboxContainer-withDescription">
-                        <label>
-                            <input type="checkbox" is="emby-checkbox" id="chkEnableLiveSidebarPage" name="chkEnableLiveSidebarPage" />
-                            <span>Enable Live Sidebar Page</span>
-                        </label>
-                        <div class="fieldDescription checkboxFieldDescription">Show "Transcode Nag Live" in the left sidebar under Plugins. Refresh the dashboard after saving to apply menu visibility changes.</div>
-                    </div>
-
                     <h2>Playback Trigger Reasons</h2>
                     <div class="fieldDescription" style="margin-bottom: 12px;">
                         Select which transcoding reasons should trigger nag events. These choices apply to both playback nags and login nag history.
@@ -102,6 +94,20 @@
                             <span>Manage Excluded Users</span>
                         </button>
                     </div>
+
+                    <h2>Live Session Monitor</h2>
+                    <div class="fieldDescription" style="margin-bottom: 12px;">
+                        Active sessions currently matching this plugin's nag criteria.
+                    </div>
+                    <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 12px; flex-wrap: wrap;">
+                        <button is="emby-button" type="button" id="btnRefreshLiveSessions" class="raised button-submit">
+                            <span>Refresh</span>
+                        </button>
+                        <span id="liveSettingsLastUpdated" class="fieldDescription"></span>
+                    </div>
+                    <div id="liveSettingsSummary" style="font-size: 1.05em; margin-bottom: 8px;"></div>
+                    <div id="liveSettingsWarning" class="fieldDescription" style="margin-bottom: 12px;"></div>
+                    <div id="liveSettingsSessionList" style="margin-bottom: 20px;"></div>
 
                     <div>
                         <button is="emby-button" type="submit" class="raised button-submit block">
@@ -267,21 +273,288 @@
                 }
             };
 
+            var LiveSessionMonitor = {
+                initialized: false,
+                refreshTimer: null,
+                selectedReasonNames: [],
+                selectedReasonMap: {},
+                excludedUserMap: {},
+
+                init: function() {
+                    if (this.initialized) {
+                        return;
+                    }
+
+                    document.getElementById('btnRefreshLiveSessions').addEventListener('click', function() {
+                        LiveSessionMonitor.refresh(true);
+                    });
+
+                    this.initialized = true;
+                },
+
+                startRefreshTimer: function() {
+                    this.stopRefreshTimer();
+                    this.refreshTimer = setInterval(function() {
+                        LiveSessionMonitor.refresh(false);
+                    }, 15000);
+                },
+
+                stopRefreshTimer: function() {
+                    if (this.refreshTimer) {
+                        clearInterval(this.refreshTimer);
+                        this.refreshTimer = null;
+                    }
+                },
+
+                normalizeId: function(id) {
+                    if (!id) {
+                        return '';
+                    }
+
+                    return String(id).replace(/-/g, '').toLowerCase();
+                },
+
+                escapeHtml: function(text) {
+                    return String(text || '')
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;')
+                        .replace(/"/g, '&quot;')
+                        .replace(/'/g, '&#39;');
+                },
+
+                setConfig: function(config) {
+                    var reasons = Array.isArray(config.AlertTranscodeReasons)
+                        ? config.AlertTranscodeReasons
+                        : ReasonSelector.defaultReasonNames;
+
+                    this.selectedReasonNames = reasons.slice();
+                    this.selectedReasonMap = {};
+                    this.selectedReasonNames.forEach(function(name) {
+                        LiveSessionMonitor.selectedReasonMap[name] = true;
+                    });
+
+                    this.excludedUserMap = {};
+                    var excludedUsers = Array.isArray(config.ExcludedUserIds) ? config.ExcludedUserIds : [];
+                    excludedUsers.forEach(function(userId) {
+                        var key = LiveSessionMonitor.normalizeId(userId);
+                        if (key) {
+                            LiveSessionMonitor.excludedUserMap[key] = true;
+                        }
+                    });
+                },
+
+                parseReasonNames: function(rawReasons) {
+                    var reasonNames = [];
+
+                    if (rawReasons === null || rawReasons === undefined) {
+                        return reasonNames;
+                    }
+
+                    if (Array.isArray(rawReasons)) {
+                        rawReasons.forEach(function(reason) {
+                            if (reason !== null && reason !== undefined) {
+                                reasonNames.push(String(reason).trim());
+                            }
+                        });
+                    } else if (typeof rawReasons === 'string') {
+                        rawReasons.split(',').forEach(function(reason) {
+                            var trimmed = reason.trim();
+                            if (trimmed) {
+                                reasonNames.push(trimmed);
+                            }
+                        });
+                    } else if (typeof rawReasons === 'number') {
+                        if (rawReasons !== 0) {
+                            reasonNames.push('__numeric_non_zero__');
+                        }
+                    } else {
+                        var asString = String(rawReasons).trim();
+                        if (asString && asString !== '0') {
+                            asString.split(',').forEach(function(reason) {
+                                var trimmed = reason.trim();
+                                if (trimmed) {
+                                    reasonNames.push(trimmed);
+                                }
+                            });
+                        }
+                    }
+
+                    var unique = {};
+                    reasonNames.forEach(function(reason) {
+                        unique[reason] = true;
+                    });
+
+                    return Object.keys(unique);
+                },
+
+                isReasonMatch: function(reasonNames) {
+                    if (!Array.isArray(this.selectedReasonNames) || this.selectedReasonNames.length === 0) {
+                        return false;
+                    }
+
+                    var hasNamedReason = false;
+                    for (var i = 0; i < reasonNames.length; i++) {
+                        var reason = reasonNames[i];
+                        if (!reason || reason === '__numeric_non_zero__') {
+                            continue;
+                        }
+
+                        hasNamedReason = true;
+                        if (this.selectedReasonMap[reason]) {
+                            return true;
+                        }
+                    }
+
+                    if (!hasNamedReason && reasonNames.indexOf('__numeric_non_zero__') !== -1) {
+                        return true;
+                    }
+
+                    return false;
+                },
+
+                formatReasons: function(session) {
+                    var rawReasons = session && session.TranscodingInfo ? session.TranscodingInfo.TranscodeReasons : null;
+                    var reasonNames = this.parseReasonNames(rawReasons).filter(function(reason) {
+                        return reason !== '__numeric_non_zero__';
+                    });
+
+                    if (reasonNames.length > 0) {
+                        return reasonNames.join(', ');
+                    }
+
+                    if (rawReasons === null || rawReasons === undefined || rawReasons === 0 || rawReasons === '0' || rawReasons === '') {
+                        return 'None';
+                    }
+
+                    return String(rawReasons);
+                },
+
+                isNaggableSession: function(session) {
+                    if (!session || !session.NowPlayingItem || !session.TranscodingInfo) {
+                        return false;
+                    }
+
+                    if (session.TranscodingInfo.IsVideoDirect === true) {
+                        return false;
+                    }
+
+                    var normalizedUserId = this.normalizeId(session.UserId);
+                    if (normalizedUserId && this.excludedUserMap[normalizedUserId]) {
+                        return false;
+                    }
+
+                    var reasonNames = this.parseReasonNames(session.TranscodingInfo.TranscodeReasons);
+                    if (reasonNames.length === 0) {
+                        return false;
+                    }
+
+                    return this.isReasonMatch(reasonNames);
+                },
+
+                renderSessions: function(sessions) {
+                    var summaryEl = document.getElementById('liveSettingsSummary');
+                    var warningEl = document.getElementById('liveSettingsWarning');
+                    var listEl = document.getElementById('liveSettingsSessionList');
+
+                    if (this.selectedReasonNames.length === 0) {
+                        summaryEl.textContent = 'No active nagged sessions.';
+                        warningEl.textContent = 'Playback Trigger Reasons is currently empty, so no sessions can match.';
+                        listEl.innerHTML = '';
+                        return;
+                    }
+
+                    if (!sessions || sessions.length === 0) {
+                        summaryEl.textContent = 'No active nagged sessions.';
+                        warningEl.textContent = '';
+                        listEl.innerHTML = '';
+                        return;
+                    }
+
+                    summaryEl.textContent = sessions.length + ' active session(s) currently matching nag criteria.';
+                    warningEl.textContent = '';
+
+                    var listHtml = '';
+                    sessions.forEach(function(session) {
+                        var nowPlaying = session.NowPlayingItem || {};
+                        var userName = session.UserName || 'Unknown';
+                        var client = session.Client || 'Unknown client';
+                        var device = session.DeviceName || session.DeviceId || 'Unknown device';
+                        var reasons = LiveSessionMonitor.formatReasons(session);
+                        var itemName = nowPlaying.Name || 'Unknown item';
+
+                        listHtml += '<div style="padding: 14px; border-radius: 6px; border: 1px solid var(--theme-accent-text-color); margin-bottom: 10px;">';
+                        listHtml += '<div style="font-size: 1.05em; font-weight: 600; margin-bottom: 8px;">' + LiveSessionMonitor.escapeHtml(itemName) + '</div>';
+                        listHtml += '<div style="margin-bottom: 4px;"><strong>User:</strong> ' + LiveSessionMonitor.escapeHtml(userName) + '</div>';
+                        listHtml += '<div style="margin-bottom: 4px;"><strong>Client:</strong> ' + LiveSessionMonitor.escapeHtml(client) + ' (' + LiveSessionMonitor.escapeHtml(device) + ')</div>';
+                        listHtml += '<div><strong>Reasons:</strong> ' + LiveSessionMonitor.escapeHtml(reasons) + '</div>';
+                        listHtml += '</div>';
+                    });
+
+                    listEl.innerHTML = listHtml;
+                },
+
+                showError: function(message) {
+                    document.getElementById('liveSettingsSummary').textContent = '';
+                    document.getElementById('liveSettingsWarning').textContent = message;
+                    document.getElementById('liveSettingsSessionList').innerHTML = '';
+                },
+
+                updateTimestamp: function() {
+                    document.getElementById('liveSettingsLastUpdated').textContent = 'Last updated: ' + new Date().toLocaleTimeString();
+                },
+
+                refresh: function(showLoading, preloadedConfig) {
+                    if (showLoading) {
+                        Dashboard.showLoadingMsg();
+                    }
+
+                    var configPromise = preloadedConfig
+                        ? Promise.resolve(preloadedConfig)
+                        : ApiClient.getPluginConfiguration(TranscodeNagConfig.pluginId);
+
+                    return configPromise.then(function(config) {
+                        LiveSessionMonitor.setConfig(config);
+
+                        return ApiClient.getSessions().then(function(sessions) {
+                            var naggableSessions = (sessions || []).filter(function(session) {
+                                return LiveSessionMonitor.isNaggableSession(session);
+                            });
+
+                            LiveSessionMonitor.renderSessions(naggableSessions);
+                            LiveSessionMonitor.updateTimestamp();
+
+                            if (showLoading) {
+                                Dashboard.hideLoadingMsg();
+                            }
+                        });
+                    }).catch(function(error) {
+                        console.error('Failed to load live session state:', error);
+                        LiveSessionMonitor.showError('Failed to load live session state.');
+                        if (showLoading) {
+                            Dashboard.hideLoadingMsg();
+                        }
+                    });
+                }
+            };
+
             document.getElementById('TranscodeNagConfigPage').addEventListener('pageshow', function () {
                 Dashboard.showLoadingMsg();
                 ReasonSelector.init();
+                LiveSessionMonitor.init();
                 UserExclusionManager.init();
                 ApiClient.getPluginConfiguration(TranscodeNagConfig.pluginId).then(function (config) {
                     document.getElementById('txtNagMessage').value = config.NagMessage || '';
                     document.getElementById('txtDelaySeconds').value = config.DelaySeconds || 5;
                     document.getElementById('txtMessageTimeout').value = config.MessageTimeoutMs || 10000;
                     document.getElementById('chkEnableLogging').checked = config.EnableLogging || false;
-                    document.getElementById('chkEnableLiveSidebarPage').checked = config.EnableLiveSidebarPage !== false;
                     document.getElementById('chkEnableLoginNag').checked = config.EnableLoginNag !== false;
                     document.getElementById('txtLoginNagThreshold').value = config.LoginNagThreshold || 5;
                     document.getElementById('selectLoginNagTimeWindow').value = config.LoginNagTimeWindow || 'Week';
                     document.getElementById('txtLoginNagMessage').value = config.LoginNagMessage || '';
                     ReasonSelector.render(config.AlertTranscodeReasons);
+                    LiveSessionMonitor.refresh(false, config);
+                    LiveSessionMonitor.startRefreshTimer();
                     Dashboard.hideLoadingMsg();
                 });
             });
@@ -295,7 +568,6 @@
                     config.DelaySeconds = parseInt(document.getElementById('txtDelaySeconds').value);
                     config.MessageTimeoutMs = parseInt(document.getElementById('txtMessageTimeout').value);
                     config.EnableLogging = document.getElementById('chkEnableLogging').checked;
-                    config.EnableLiveSidebarPage = document.getElementById('chkEnableLiveSidebarPage').checked;
                     config.EnableLoginNag = document.getElementById('chkEnableLoginNag').checked;
                     config.LoginNagThreshold = parseInt(document.getElementById('txtLoginNagThreshold').value);
                     config.LoginNagTimeWindow = document.getElementById('selectLoginNagTimeWindow').value;
@@ -424,6 +696,10 @@
                     });
                 }
             };
+
+            document.getElementById('TranscodeNagConfigPage').addEventListener('pagehide', function() {
+                LiveSessionMonitor.stopRefreshTimer();
+            });
         </script>
     </div>
 </body>
