@@ -25,9 +25,12 @@ public class TranscodeEventStore
 
     private string GetDataFilePath()
     {
-        var dataDir = Path.Combine(_appPaths.DataPath, "plugins", "data", "TranscodeNag");
+        var dataDir = Path.GetFullPath(Path.Join(_appPaths.DataPath, "plugins", "data", "TranscodeNag"));
         Directory.CreateDirectory(dataDir);
-        return Path.Combine(dataDir, DataFileName);
+
+        // Keep file segment normalized so future refactors cannot inject rooted paths here.
+        var dataFileName = Path.GetFileName(DataFileName);
+        return Path.Join(dataDir, dataFileName);
     }
 
     public async void AddEvent(TranscodeEvent transcodeEvent)
@@ -48,7 +51,31 @@ public class TranscodeEventStore
 
             await SaveEventsAsync(events).ConfigureAwait(false);
         }
-        catch (Exception ex)
+        catch (IOException ex)
+        {
+            _logger.LogError(ex, "Error adding transcode event");
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            _logger.LogError(ex, "Error adding transcode event");
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogError(ex, "Error adding transcode event");
+        }
+        catch (NotSupportedException ex)
+        {
+            _logger.LogError(ex, "Error adding transcode event");
+        }
+        catch (ArgumentException ex)
+        {
+            _logger.LogError(ex, "Error adding transcode event");
+        }
+        catch (ObjectDisposedException ex)
+        {
+            _logger.LogError(ex, "Error adding transcode event");
+        }
+        catch (InvalidOperationException ex)
         {
             _logger.LogError(ex, "Error adding transcode event");
         }
@@ -160,7 +187,27 @@ public class TranscodeEventStore
             var json = await File.ReadAllTextAsync(filePath).ConfigureAwait(false);
             return JsonSerializer.Deserialize<List<TranscodeEvent>>(json) ?? new List<TranscodeEvent>();
         }
-        catch (Exception ex)
+        catch (IOException ex)
+        {
+            _logger.LogError(ex, "Error loading transcode events from {FilePath}", filePath);
+            return new List<TranscodeEvent>();
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            _logger.LogError(ex, "Error loading transcode events from {FilePath}", filePath);
+            return new List<TranscodeEvent>();
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogError(ex, "Error loading transcode events from {FilePath}", filePath);
+            return new List<TranscodeEvent>();
+        }
+        catch (NotSupportedException ex)
+        {
+            _logger.LogError(ex, "Error loading transcode events from {FilePath}", filePath);
+            return new List<TranscodeEvent>();
+        }
+        catch (ArgumentException ex)
         {
             _logger.LogError(ex, "Error loading transcode events from {FilePath}", filePath);
             return new List<TranscodeEvent>();
@@ -176,7 +223,23 @@ public class TranscodeEventStore
             var json = JsonSerializer.Serialize(events, new JsonSerializerOptions { WriteIndented = true });
             await File.WriteAllTextAsync(filePath, json).ConfigureAwait(false);
         }
-        catch (Exception ex)
+        catch (IOException ex)
+        {
+            _logger.LogError(ex, "Error saving transcode events to {FilePath}", filePath);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            _logger.LogError(ex, "Error saving transcode events to {FilePath}", filePath);
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogError(ex, "Error saving transcode events to {FilePath}", filePath);
+        }
+        catch (NotSupportedException ex)
+        {
+            _logger.LogError(ex, "Error saving transcode events to {FilePath}", filePath);
+        }
+        catch (ArgumentException ex)
         {
             _logger.LogError(ex, "Error saving transcode events to {FilePath}", filePath);
         }

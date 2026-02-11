@@ -147,7 +147,19 @@ public class PlaybackMonitor : IHostedService
 
             return null;
         }
-        catch
+        catch (AmbiguousMatchException)
+        {
+            return null;
+        }
+        catch (TargetException)
+        {
+            return null;
+        }
+        catch (TargetInvocationException)
+        {
+            return null;
+        }
+        catch (MethodAccessException)
         {
             return null;
         }
@@ -312,7 +324,15 @@ public class PlaybackMonitor : IHostedService
                 },
                 CancellationToken.None);
         }
-        catch (Exception ex)
+        catch (ObjectDisposedException ex)
+        {
+            _logger.LogError(ex, "Error sending nag message to session {SessionId}", session.Id);
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogError(ex, "Error sending nag message to session {SessionId}", session.Id);
+        }
+        catch (OperationCanceledException ex)
         {
             _logger.LogError(ex, "Error sending nag message to session {SessionId}", session.Id);
         }
@@ -382,9 +402,13 @@ public class PlaybackMonitor : IHostedService
                 _eventStore.AddEvent(creditEvent);
             });
         }
-        catch
+        catch (ObjectDisposedException ex)
         {
-            // ignore
+            _logger.LogDebug(ex, "Skipping improvement credit task because monitor is disposing");
+        }
+        catch (TaskSchedulerException ex)
+        {
+            _logger.LogDebug(ex, "Unable to queue improvement credit task");
         }
     }
 
@@ -409,7 +433,15 @@ public class PlaybackMonitor : IHostedService
         {
             await MaybeSendLoginOrOpenNagAsync(e.SessionInfo, config).ConfigureAwait(false);
         }
-        catch (Exception ex)
+        catch (ObjectDisposedException ex)
+        {
+            _logger.LogError(ex, "Error handling session-start login nag");
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogError(ex, "Error handling session-start login nag");
+        }
+        catch (OperationCanceledException ex)
         {
             _logger.LogError(ex, "Error handling session-start login nag");
         }
