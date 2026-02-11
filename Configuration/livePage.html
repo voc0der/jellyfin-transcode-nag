@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Transcode Nag Live</title>
+</head>
+<body>
+    <div id="TranscodeNagLivePage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-button">
+        <div data-role="content">
+            <div class="content-primary">
+                <h1>Transcode Nag Live</h1>
+                <div class="fieldDescription" style="margin-bottom: 14px;">
+                    Active sessions currently matching this plugin's nag conditions.
+                </div>
+                <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 14px; flex-wrap: wrap;">
+                    <button is="emby-button" type="button" id="btnRefreshLive" class="raised button-submit">
+                        <span>Refresh</span>
+                    </button>
+                    <span id="lastUpdatedText" class="fieldDescription"></span>
+                </div>
+                <div id="liveSummary" style="font-size: 1.05em; margin-bottom: 8px;"></div>
+                <div id="liveWarning" class="fieldDescription" style="margin-bottom: 12px;"></div>
+                <div id="liveSessionList"></div>
+            </div>
+        </div>
+
+        <script type="text/javascript">
+            (function () {
+                var pluginId = "a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d";
+                var pageId = "TranscodeNagLivePage";
+                var refreshTimer = null;
+                var initialized = false;
+
+                var defaultReasonNames = [
+                    'ContainerNotSupported',
+                    'VideoCodecNotSupported',
+                    'AudioCodecNotSupported',
+                    'SubtitleCodecNotSupported',
+                    'VideoProfileNotSupported',
+                    'VideoLevelNotSupported',
+                    'VideoResolutionNotSupported',
+                    'VideoBitDepthNotSupported',
+                    'VideoFramerateNotSupported',
+                    'RefFramesNotSupported',
+                    'AnamorphicVideoNotSupported',
+                    'InterlacedVideoNotSupported',
+                    'AudioChannelsNotSupported',
+                    'AudioProfileNotSupported',
+                    'AudioSampleRateNotSupported',
+                    'SecondaryAudioNotSupported',
+                    'VideoRangeTypeNotSupported',
+                    'DirectPlayError'
+                ];
+
+                var selectedReasonNames = defaultReasonNames.slice();
+                var selectedReasonMap = {};
+                var excludedUserMap = {};
+
+                function normalizeId(id) {
+                    if (!id) {
+                        return '';
+                    }
+                    return String(id).replace(/-/g, '').toLowerCase();
+                }
+
+                function escapeHtml(text) {
+                    return String(text || '')
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;')
+                        .replace(/"/g, '&quot;')
+                        .replace(/'/g, '&#39;');
+                }
+
+                function setSelectedReasons(reasons) {
+                    selectedReasonNames = Array.isArray(reasons) ? reasons.slice() : defaultReasonNames.slice();
+                    selectedReasonMap = {};
+                    selectedReasonNames.forEach(function (name) {
+                        selectedReasonMap[name] = true;
+                    });
+                }
+
+                function setExcludedUsers(excludedUserIds) {
+                    excludedUserMap = {};
+                    if (!Array.isArray(excludedUserIds)) {
+                        return;
+                    }
+                    excludedUserIds.forEach(function (userId) {
+                        var key = normalizeId(userId);
+                        if (key) {
+                            excludedUserMap[key] = true;
+                        }
+                    });
+                }
+
+                function parseReasonNames(rawReasons) {
+                    var reasonNames = [];
+                    if (rawReasons === null || rawReasons === undefined) {
+                        return reasonNames;
+                    }
+
+                    if (Array.isArray(rawReasons)) {
+                        rawReasons.forEach(function (reason) {
+                            if (reason !== null && reason !== undefined) {
+                                reasonNames.push(String(reason).trim());
+                            }
+                        });
+                    } else if (typeof rawReasons === 'string') {
+                        rawReasons.split(',').forEach(function (reason) {
+                            var trimmed = reason.trim();
+                            if (trimmed) {
+                                reasonNames.push(trimmed);
+                            }
+                        });
+                    } else if (typeof rawReasons === 'number') {
+                        if (rawReasons !== 0) {
+                            reasonNames.push('__numeric_non_zero__');
+                        }
+                    } else {
+                        var asString = String(rawReasons).trim();
+                        if (asString && asString !== '0') {
+                            asString.split(',').forEach(function (reason) {
+                                var trimmed = reason.trim();
+                                if (trimmed) {
+                                    reasonNames.push(trimmed);
+                                }
+                            });
+                        }
+                    }
+
+                    var unique = {};
+                    reasonNames.forEach(function (reason) {
+                        unique[reason] = true;
+                    });
+
+                    return Object.keys(unique);
+                }
+
+                function isReasonMatch(reasonNames) {
+                    if (!Array.isArray(selectedReasonNames) || selectedReasonNames.length === 0) {
+                        return false;
+                    }
+
+                    var hasNamedReason = false;
+                    for (var i = 0; i < reasonNames.length; i++) {
+                        var reason = reasonNames[i];
+                        if (!reason || reason === '__numeric_non_zero__') {
+                            continue;
+                        }
+
+                        hasNamedReason = true;
+                        if (selectedReasonMap[reason]) {
+                            return true;
+                        }
+                    }
+
+                    // Fallback for enum serialization formats that don't include readable names.
+                    if (!hasNamedReason && reasonNames.indexOf('__numeric_non_zero__') !== -1) {
+                        return true;
+                    }
+
+                    return false;
+                }
+
+                function formatReasons(session) {
+                    var rawReasons = session && session.TranscodingInfo ? session.TranscodingInfo.TranscodeReasons : null;
+                    var reasonNames = parseReasonNames(rawReasons).filter(function (reason) {
+                        return reason !== '__numeric_non_zero__';
+                    });
+
+                    if (reasonNames.length > 0) {
+                        return reasonNames.join(', ');
+                    }
+
+                    if (rawReasons === null || rawReasons === undefined || rawReasons === 0 || rawReasons === '0' || rawReasons === '') {
+                        return 'None';
+                    }
+
+                    return String(rawReasons);
+                }
+
+                function isNaggableSession(session) {
+                    if (!session || !session.NowPlayingItem || !session.TranscodingInfo) {
+                        return false;
+                    }
+
+                    if (session.TranscodingInfo.IsVideoDirect === true) {
+                        return false;
+                    }
+
+                    var normalizedUserId = normalizeId(session.UserId);
+                    if (normalizedUserId && excludedUserMap[normalizedUserId]) {
+                        return false;
+                    }
+
+                    var reasonNames = parseReasonNames(session.TranscodingInfo.TranscodeReasons);
+                    if (reasonNames.length === 0) {
+                        return false;
+                    }
+
+                    return isReasonMatch(reasonNames);
+                }
+
+                function renderSessions(sessions) {
+                    var summaryEl = document.getElementById('liveSummary');
+                    var warningEl = document.getElementById('liveWarning');
+                    var listEl = document.getElementById('liveSessionList');
+
+                    if (selectedReasonNames.length === 0) {
+                        summaryEl.textContent = 'No active nagged sessions.';
+                        warningEl.textContent = 'Playback Trigger Reasons is currently empty, so no sessions can match.';
+                        listEl.innerHTML = '';
+                        return;
+                    }
+
+                    if (!sessions || sessions.length === 0) {
+                        summaryEl.textContent = 'No active nagged sessions.';
+                        warningEl.textContent = '';
+                        listEl.innerHTML = '';
+                        return;
+                    }
+
+                    summaryEl.textContent = sessions.length + ' active session(s) currently matching nag criteria.';
+                    warningEl.textContent = '';
+
+                    var listHtml = '';
+                    sessions.forEach(function (session) {
+                        var nowPlaying = session.NowPlayingItem || {};
+                        var userName = session.UserName || 'Unknown';
+                        var client = session.Client || 'Unknown client';
+                        var device = session.DeviceName || session.DeviceId || 'Unknown device';
+                        var reasons = formatReasons(session);
+                        var itemName = nowPlaying.Name || 'Unknown item';
+
+                        listHtml += '<div style="padding: 14px; border-radius: 6px; border: 1px solid var(--theme-accent-text-color); margin-bottom: 10px;">';
+                        listHtml += '<div style="font-size: 1.05em; font-weight: 600; margin-bottom: 8px;">' + escapeHtml(itemName) + '</div>';
+                        listHtml += '<div style="margin-bottom: 4px;"><strong>User:</strong> ' + escapeHtml(userName) + '</div>';
+                        listHtml += '<div style="margin-bottom: 4px;"><strong>Client:</strong> ' + escapeHtml(client) + ' (' + escapeHtml(device) + ')</div>';
+                        listHtml += '<div><strong>Reasons:</strong> ' + escapeHtml(reasons) + '</div>';
+                        listHtml += '</div>';
+                    });
+
+                    listEl.innerHTML = listHtml;
+                }
+
+                function updateTimestamp() {
+                    var timestampEl = document.getElementById('lastUpdatedText');
+                    timestampEl.textContent = 'Last updated: ' + new Date().toLocaleTimeString();
+                }
+
+                function showError(message) {
+                    document.getElementById('liveSummary').textContent = '';
+                    document.getElementById('liveWarning').textContent = message;
+                    document.getElementById('liveSessionList').innerHTML = '';
+                }
+
+                function refreshLiveStatus(isBackground) {
+                    if (!isBackground) {
+                        Dashboard.showLoadingMsg();
+                    }
+
+                    return ApiClient.getPluginConfiguration(pluginId).then(function (config) {
+                        setSelectedReasons(config.AlertTranscodeReasons);
+                        setExcludedUsers(config.ExcludedUserIds || []);
+
+                        return ApiClient.getSessions().then(function (sessions) {
+                            var naggableSessions = (sessions || []).filter(isNaggableSession);
+                            renderSessions(naggableSessions);
+                            updateTimestamp();
+                            if (!isBackground) {
+                                Dashboard.hideLoadingMsg();
+                            }
+                        });
+                    }).catch(function (error) {
+                        console.error('Failed to load live transcode nag status:', error);
+                        showError('Failed to load live session state.');
+                        if (!isBackground) {
+                            Dashboard.hideLoadingMsg();
+                        }
+                    });
+                }
+
+                function startRefreshTimer() {
+                    stopRefreshTimer();
+                    refreshTimer = setInterval(function () {
+                        refreshLiveStatus(true);
+                    }, 15000);
+                }
+
+                function stopRefreshTimer() {
+                    if (refreshTimer) {
+                        clearInterval(refreshTimer);
+                        refreshTimer = null;
+                    }
+                }
+
+                function initPage() {
+                    if (initialized) {
+                        return;
+                    }
+
+                    document.getElementById('btnRefreshLive').addEventListener('click', function () {
+                        refreshLiveStatus(false);
+                    });
+
+                    initialized = true;
+                }
+
+                document.getElementById(pageId).addEventListener('pageshow', function () {
+                    initPage();
+                    refreshLiveStatus(false);
+                    startRefreshTimer();
+                });
+
+                document.getElementById(pageId).addEventListener('pagehide', function () {
+                    stopRefreshTimer();
+                });
+            })();
+        </script>
+    </div>
+</body>
+</html>

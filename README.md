@@ -17,7 +17,8 @@ This plugin only bothers users when they could fix the issue by using a better c
 ### Real-Time Playback Monitoring
 - Monitors active playback sessions in real-time
 - Detects transcoding reasons using Jellyfin's `TranscodeReasons` API
-- Only nags when transcoding is due to format/codec incompatibility
+- Select exactly which transcoding reasons should trigger nags
+- Defaults to format/codec compatibility reasons (same behavior as previous versions)
 - Nags once per video (not per session)
 - Configurable delay, message text, and timeout
 
@@ -36,12 +37,13 @@ This plugin only bothers users when they could fix the issue by using a better c
 
 ### General
 - Web UI configuration page
+- Optional sidebar page ("Transcode Nag Live") that lists active sessions matching nag criteria
 - Logging support for debugging
 - Event-driven architecture (no polling)
 
-## Transcoding Reasons That Trigger Nags
+## Transcoding Reasons
 
-The plugin nags when transcoding is caused by:
+By default, the plugin nags when transcoding is caused by:
 - Container not supported
 - Video/Audio codec not supported
 - Video profile, level, resolution, bit depth, or framerate not supported
@@ -51,10 +53,9 @@ The plugin nags when transcoding is caused by:
 - Reference frames not supported
 - Video range type not supported
 
-## Transcoding Reasons That DON'T Trigger Nags
+You can now customize this list in the plugin configuration page and choose exactly which reasons should generate alerts.
 
-- Bitrate limiting (user choice)
-- Unknown/unspecified reasons (to avoid false positives)
+Reasons that are not selected will not trigger nag events.
 
 ## Installation
 
@@ -105,6 +106,9 @@ Now you'll get automatic updates whenever a new version is released!
 - **Delay Before Check**: How long to wait after playback starts before checking (1-30 seconds, default: 5)
 - **Message Timeout**: How long the message displays in milliseconds (3000-30000 ms, default: 10000)
 - **Enable Logging**: Log when nag messages are sent (helpful for debugging)
+- **Enable Live Sidebar Page**: Show/hide the "Transcode Nag Live" entry in the left sidebar (refresh dashboard after saving)
+- **Playback Trigger Reasons**: Choose which transcoding reasons trigger nag events
+  - Use quick actions: **Select All**, **Reset Defaults**, or **Clear All**
 
 ### Login Nag Settings
 - **Enable Login Nag**: Toggle to enable/disable the login nag feature
@@ -119,7 +123,14 @@ Now you'll get automatic updates whenever a new version is released!
 - Click **Manage Excluded Users** to open the exclusion modal
 - All users are **checked** (included) by default
 - **Uncheck** a user to exclude them from all nag messages
+- Use quick actions in the modal: **Select All**, **Reset Defaults**, or **Clear All**
 - Click **Save** in the modal to apply changes
+
+### Live Sidebar Page
+- A **Transcode Nag Live** page can appear in the left sidebar under Plugins
+- Visibility is controlled by **Enable Live Sidebar Page** in plugin settings
+- It refreshes every 15 seconds and shows only active sessions matching current nag rules
+- It respects your selected playback trigger reasons and excluded users
 
 ## How It Works
 
@@ -128,8 +139,9 @@ Now you'll get automatic updates whenever a new version is released!
 2. When playback starts, waits `DelaySeconds` for transcoding info to populate
 3. Checks the session's transcoding status:
    - Examines `TranscodeReasons` flags
-   - If any "NotSupported" flags are set, sends a nag message and records the event
-   - If only bitrate limiting (no flags), does nothing
+   - Matches those flags against the configured trigger-reason selection
+   - If at least one selected reason is present, sends a nag message and records the event
+   - If no selected reason matches, does nothing
 4. Tracks which videos have been nagged per session (nags once per video, not per session)
 5. When playback stops, clears the nag tracking for that video
 

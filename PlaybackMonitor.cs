@@ -4,14 +4,14 @@ using System.Linq;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using Jellyfin.Plugin.TranscodeNag.Data;
+using Jellyfin.Plugin.TranscodeNag.Models;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Session;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Jellyfin.Plugin.TranscodeNag.Data;
-using Jellyfin.Plugin.TranscodeNag.Models;
 
 namespace Jellyfin.Plugin.TranscodeNag;
 
@@ -41,7 +41,7 @@ public class PlaybackMonitor : IHostedService
     {
         _sessionManager = sessionManager;
         _logger = logger;
-       _eventStore = new TranscodeEventStore(applicationPaths, eventStoreLogger);
+        _eventStore = new TranscodeEventStore(applicationPaths, eventStoreLogger);
     }
 
     public Task StartAsync(CancellationToken cancellationToken)
@@ -83,7 +83,7 @@ public class PlaybackMonitor : IHostedService
         // In that case, SessionStarted still works for fresh sessions.
         foreach (var session in _sessionManager.Sessions)
         {
-            if (session.Id == null || session.UserId == null)
+            if (session.Id == null || session.UserId == Guid.Empty)
             {
                 continue;
             }
@@ -187,7 +187,7 @@ public class PlaybackMonitor : IHostedService
         }
 
         // Check if transcoding is due to unsupported format/codec
-        if (ShouldNagSession(transcodeInfo))
+        if (ShouldNagSession(transcodeInfo, config))
         {
             // Record the event
             RecordTranscodeEvent(session, transcodeInfo);
@@ -209,37 +209,46 @@ public class PlaybackMonitor : IHostedService
         }
     }
 
-    private bool ShouldNagSession(TranscodingInfo transcodeInfo)
+    private bool ShouldNagSession(TranscodingInfo transcodeInfo, Configuration.PluginConfiguration config)
     {
         var reasons = transcodeInfo.TranscodeReasons;
 
         // If no transcode reasons specified, it's likely bitrate limiting - don't nag
-        if ((int)reasons == 0)
+        if (reasons == (TranscodeReason)0)
         {
             return false;
         }
 
-        // Check for format/codec compatibility issues
-        var badReasons = TranscodeReason.ContainerNotSupported
-            | TranscodeReason.VideoCodecNotSupported
-            | TranscodeReason.AudioCodecNotSupported
-            | TranscodeReason.SubtitleCodecNotSupported
-            | TranscodeReason.VideoProfileNotSupported
-            | TranscodeReason.VideoLevelNotSupported
-            | TranscodeReason.VideoResolutionNotSupported
-            | TranscodeReason.VideoBitDepthNotSupported
-            | TranscodeReason.VideoFramerateNotSupported
-            | TranscodeReason.RefFramesNotSupported
-            | TranscodeReason.AnamorphicVideoNotSupported
-            | TranscodeReason.InterlacedVideoNotSupported
-            | TranscodeReason.AudioChannelsNotSupported
-            | TranscodeReason.AudioProfileNotSupported
-            | TranscodeReason.AudioSampleRateNotSupported
-            | TranscodeReason.SecondaryAudioNotSupported
-            | TranscodeReason.VideoRangeTypeNotSupported
-            | TranscodeReason.DirectPlayError;
+        var enabledNagReasons = BuildConfiguredNagReasonMask(config.AlertTranscodeReasons);
+        if (enabledNagReasons == (TranscodeReason)0)
+        {
+            return false;
+        }
 
-        return (reasons & badReasons) != 0;
+        return (reasons & enabledNagReasons) != 0;
+    }
+
+    private static TranscodeReason BuildConfiguredNagReasonMask(string[]? configuredReasonNames)
+    {
+        var selectedReasonNames = configuredReasonNames == null
+            ? Configuration.PluginConfiguration.GetDefaultAlertTranscodeReasons()
+            : configuredReasonNames;
+
+        var reasonMask = (TranscodeReason)0;
+        foreach (var reasonName in selectedReasonNames)
+        {
+            if (string.IsNullOrWhiteSpace(reasonName))
+            {
+                continue;
+            }
+
+            if (Enum.TryParse(reasonName, true, out TranscodeReason parsedReason))
+            {
+                reasonMask |= parsedReason;
+            }
+        }
+
+        return reasonMask;
     }
 
     private bool IsUserExcluded(Guid? userId)
@@ -311,7 +320,7 @@ public class PlaybackMonitor : IHostedService
 
     private void RecordTranscodeEvent(SessionInfo session, TranscodingInfo transcodeInfo)
     {
-        if (session.UserId == null || session.NowPlayingItem == null)
+        if (session.UserId == Guid.Empty || session.NowPlayingItem == null)
         {
             return;
         }
@@ -333,7 +342,7 @@ public class PlaybackMonitor : IHostedService
 
     private void RecordImprovementCreditIfNeeded(SessionInfo session)
     {
-        if (session.UserId == null || session.NowPlayingItem == null)
+        if (session.UserId == Guid.Empty || session.NowPlayingItem == null)
         {
             return;
         }
@@ -408,7 +417,7 @@ public class PlaybackMonitor : IHostedService
 
     private async Task MaybeSendLoginOrOpenNagAsync(SessionInfo session, Configuration.PluginConfiguration config)
     {
-        if (session.Id == null || session.UserId == null)
+        if (session.Id == null || session.UserId == Guid.Empty)
         {
             return;
         }
@@ -469,7 +478,7 @@ public class PlaybackMonitor : IHostedService
                 timeWindowText);
         }
 
-        _sessionManager.SendMessageCommand(
+        await _sessionManager.SendMessageCommand(
             null,
             session.Id,
             new MessageCommand

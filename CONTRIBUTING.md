@@ -15,6 +15,15 @@ Issues and pull requests are welcome!
 dotnet build --configuration Release
 ```
 
+## Linting
+
+Run lint checks locally before opening a PR:
+
+```bash
+dotnet format whitespace --verify-no-changes
+dotnet format style --verify-no-changes --severity warn
+```
+
 ## Reporting Issues
 
 - Search existing issues before opening a new one

@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Configuration\configPage.html" />
+    <EmbeddedResource Include="Configuration\livePage.html" />
   </ItemGroup>
 
 </Project>

@@ -35,6 +35,31 @@
                         <div class="fieldDescription checkboxFieldDescription">Log when nag messages are sent (helpful for debugging).</div>
                     </div>
 
+                    <div class="checkboxContainer checkboxContainer-withDescription">
+                        <label>
+                            <input type="checkbox" is="emby-checkbox" id="chkEnableLiveSidebarPage" name="chkEnableLiveSidebarPage" />
+                            <span>Enable Live Sidebar Page</span>
+                        </label>
+                        <div class="fieldDescription checkboxFieldDescription">Show "Transcode Nag Live" in the left sidebar under Plugins. Refresh the dashboard after saving to apply menu visibility changes.</div>
+                    </div>
+
+                    <h2>Playback Trigger Reasons</h2>
+                    <div class="fieldDescription" style="margin-bottom: 12px;">
+                        Select which transcoding reasons should trigger nag events. These choices apply to both playback nags and login nag history.
+                    </div>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;">
+                        <button is="emby-button" type="button" id="btnReasonSelectAll" class="raised">
+                            <span>Select All</span>
+                        </button>
+                        <button is="emby-button" type="button" id="btnReasonResetDefaults" class="raised">
+                            <span>Reset Defaults</span>
+                        </button>
+                        <button is="emby-button" type="button" id="btnReasonClearAll" class="raised">
+                            <span>Clear All</span>
+                        </button>
+                    </div>
+                    <div id="transcodeReasonList" style="margin-bottom: 20px;"></div>
+
                     <h2>Login Nag Settings</h2>
 
                     <div class="checkboxContainer checkboxContainer-withDescription">
@@ -93,6 +118,17 @@
                     <div class="fieldDescription" style="margin-bottom: 15px;">
                         By default, all users are included. Uncheck users to exclude them from ALL nag messages.
                     </div>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px;">
+                        <button is="emby-button" type="button" id="btnUsersSelectAll" class="raised">
+                            <span>Select All</span>
+                        </button>
+                        <button is="emby-button" type="button" id="btnUsersResetDefaults" class="raised">
+                            <span>Reset Defaults</span>
+                        </button>
+                        <button is="emby-button" type="button" id="btnUsersClearAll" class="raised">
+                            <span>Clear All</span>
+                        </button>
+                    </div>
                     <div id="userExclusionList" style="max-height: 400px; overflow-y: auto; margin-bottom: 20px;">
                         <!-- User checkboxes will be populated here -->
                     </div>
@@ -113,17 +149,139 @@
                 pluginId: "a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d"
             };
 
+            var ReasonSelector = {
+                initialized: false,
+                reasonOptions: [
+                    { name: 'ContainerNotSupported', label: 'Container Not Supported', description: 'The file container cannot be played directly by the client.' },
+                    { name: 'VideoCodecNotSupported', label: 'Video Codec Not Supported', description: 'The client does not support the video codec.' },
+                    { name: 'AudioCodecNotSupported', label: 'Audio Codec Not Supported', description: 'The client does not support the audio codec.' },
+                    { name: 'SubtitleCodecNotSupported', label: 'Subtitle Codec Not Supported', description: 'The subtitle format is not directly supported.' },
+                    { name: 'VideoProfileNotSupported', label: 'Video Profile Not Supported', description: 'The client does not support this video profile.' },
+                    { name: 'VideoLevelNotSupported', label: 'Video Level Not Supported', description: 'The video level exceeds client capabilities.' },
+                    { name: 'VideoResolutionNotSupported', label: 'Video Resolution Not Supported', description: 'The video resolution is not supported directly.' },
+                    { name: 'VideoBitDepthNotSupported', label: 'Video Bit Depth Not Supported', description: 'The client cannot decode this bit depth.' },
+                    { name: 'VideoFramerateNotSupported', label: 'Video Framerate Not Supported', description: 'The frame rate is not supported for direct play.' },
+                    { name: 'RefFramesNotSupported', label: 'Reference Frames Not Supported', description: 'Too many reference frames for the client decoder.' },
+                    { name: 'AnamorphicVideoNotSupported', label: 'Anamorphic Video Not Supported', description: 'Anamorphic video is not supported by the client.' },
+                    { name: 'InterlacedVideoNotSupported', label: 'Interlaced Video Not Supported', description: 'The client cannot direct play interlaced video.' },
+                    { name: 'AudioChannelsNotSupported', label: 'Audio Channels Not Supported', description: 'The channel layout exceeds client support.' },
+                    { name: 'AudioProfileNotSupported', label: 'Audio Profile Not Supported', description: 'The audio profile is unsupported by the client.' },
+                    { name: 'AudioSampleRateNotSupported', label: 'Audio Sample Rate Not Supported', description: 'The sample rate exceeds client support.' },
+                    { name: 'SecondaryAudioNotSupported', label: 'Secondary Audio Not Supported', description: 'Secondary audio tracks require transcoding.' },
+                    { name: 'VideoRangeTypeNotSupported', label: 'Video Range Type Not Supported', description: 'Dynamic range (for example HDR/SDR) is unsupported.' },
+                    { name: 'DirectPlayError', label: 'Direct Play Error', description: 'Jellyfin reported a direct play failure and fell back to transcode.' }
+                ],
+
+                defaultReasonNames: [
+                    'ContainerNotSupported',
+                    'VideoCodecNotSupported',
+                    'AudioCodecNotSupported',
+                    'SubtitleCodecNotSupported',
+                    'VideoProfileNotSupported',
+                    'VideoLevelNotSupported',
+                    'VideoResolutionNotSupported',
+                    'VideoBitDepthNotSupported',
+                    'VideoFramerateNotSupported',
+                    'RefFramesNotSupported',
+                    'AnamorphicVideoNotSupported',
+                    'InterlacedVideoNotSupported',
+                    'AudioChannelsNotSupported',
+                    'AudioProfileNotSupported',
+                    'AudioSampleRateNotSupported',
+                    'SecondaryAudioNotSupported',
+                    'VideoRangeTypeNotSupported',
+                    'DirectPlayError'
+                ],
+
+                init: function() {
+                    if (this.initialized) {
+                        return;
+                    }
+
+                    document.getElementById('btnReasonSelectAll').addEventListener('click', this.selectAll.bind(this));
+                    document.getElementById('btnReasonResetDefaults').addEventListener('click', this.resetDefaults.bind(this));
+                    document.getElementById('btnReasonClearAll').addEventListener('click', this.clearAll.bind(this));
+                    this.initialized = true;
+                },
+
+                render: function(selectedReasonNames) {
+                    var selected = Array.isArray(selectedReasonNames)
+                        ? selectedReasonNames
+                        : this.defaultReasonNames;
+                    var selectedMap = {};
+                    selected.forEach(function(name) {
+                        selectedMap[name] = true;
+                    });
+
+                    var listHtml = '';
+                    this.reasonOptions.forEach(function(reason) {
+                        var isChecked = !!selectedMap[reason.name];
+                        listHtml += '<div class="checkboxContainer checkboxContainer-withDescription" style="margin-bottom: 8px;">';
+                        listHtml += '<label>';
+                        listHtml += '<input type="checkbox" is="emby-checkbox" data-reason-name="' + reason.name + '" ' + (isChecked ? 'checked' : '') + ' />';
+                        listHtml += '<span>' + reason.label + '</span>';
+                        listHtml += '</label>';
+                        listHtml += '<div class="fieldDescription checkboxFieldDescription">' + reason.description + '</div>';
+                        listHtml += '</div>';
+                    });
+
+                    document.getElementById('transcodeReasonList').innerHTML = listHtml;
+                },
+
+                selectAll: function() {
+                    var checkboxes = document.querySelectorAll('#transcodeReasonList input[type="checkbox"]');
+                    checkboxes.forEach(function(checkbox) {
+                        checkbox.checked = true;
+                    });
+                },
+
+                resetDefaults: function() {
+                    var selectedMap = {};
+                    this.defaultReasonNames.forEach(function(name) {
+                        selectedMap[name] = true;
+                    });
+
+                    var checkboxes = document.querySelectorAll('#transcodeReasonList input[type="checkbox"]');
+                    checkboxes.forEach(function(checkbox) {
+                        var reasonName = checkbox.getAttribute('data-reason-name');
+                        checkbox.checked = !!selectedMap[reasonName];
+                    });
+                },
+
+                clearAll: function() {
+                    var checkboxes = document.querySelectorAll('#transcodeReasonList input[type="checkbox"]');
+                    checkboxes.forEach(function(checkbox) {
+                        checkbox.checked = false;
+                    });
+                },
+
+                getSelectedReasonNames: function() {
+                    var selected = [];
+                    var checkboxes = document.querySelectorAll('#transcodeReasonList input[type="checkbox"]');
+                    checkboxes.forEach(function(checkbox) {
+                        if (checkbox.checked) {
+                            selected.push(checkbox.getAttribute('data-reason-name'));
+                        }
+                    });
+                    return selected;
+                }
+            };
+
             document.getElementById('TranscodeNagConfigPage').addEventListener('pageshow', function () {
                 Dashboard.showLoadingMsg();
+                ReasonSelector.init();
+                UserExclusionManager.init();
                 ApiClient.getPluginConfiguration(TranscodeNagConfig.pluginId).then(function (config) {
                     document.getElementById('txtNagMessage').value = config.NagMessage || '';
                     document.getElementById('txtDelaySeconds').value = config.DelaySeconds || 5;
                     document.getElementById('txtMessageTimeout').value = config.MessageTimeoutMs || 10000;
                     document.getElementById('chkEnableLogging').checked = config.EnableLogging || false;
+                    document.getElementById('chkEnableLiveSidebarPage').checked = config.EnableLiveSidebarPage !== false;
                     document.getElementById('chkEnableLoginNag').checked = config.EnableLoginNag !== false;
                     document.getElementById('txtLoginNagThreshold').value = config.LoginNagThreshold || 5;
                     document.getElementById('selectLoginNagTimeWindow').value = config.LoginNagTimeWindow || 'Week';
                     document.getElementById('txtLoginNagMessage').value = config.LoginNagMessage || '';
+                    ReasonSelector.render(config.AlertTranscodeReasons);
                     Dashboard.hideLoadingMsg();
                 });
             });
@@ -137,10 +295,12 @@
                     config.DelaySeconds = parseInt(document.getElementById('txtDelaySeconds').value);
                     config.MessageTimeoutMs = parseInt(document.getElementById('txtMessageTimeout').value);
                     config.EnableLogging = document.getElementById('chkEnableLogging').checked;
+                    config.EnableLiveSidebarPage = document.getElementById('chkEnableLiveSidebarPage').checked;
                     config.EnableLoginNag = document.getElementById('chkEnableLoginNag').checked;
                     config.LoginNagThreshold = parseInt(document.getElementById('txtLoginNagThreshold').value);
                     config.LoginNagTimeWindow = document.getElementById('selectLoginNagTimeWindow').value;
                     config.LoginNagMessage = document.getElementById('txtLoginNagMessage').value;
+                    config.AlertTranscodeReasons = ReasonSelector.getSelectedReasonNames();
 
                     ApiClient.updatePluginConfiguration(TranscodeNagConfig.pluginId, config).then(function (result) {
                         Dashboard.processPluginConfigurationUpdateResult(result);
@@ -152,13 +312,22 @@
 
             // User Exclusion Management
             var UserExclusionManager = {
+                initialized: false,
                 allUsers: [],
                 excludedUserIds: [],
 
                 init: function() {
+                    if (this.initialized) {
+                        return;
+                    }
+
                     document.getElementById('btnManageExclusions').addEventListener('click', this.openModal.bind(this));
                     document.getElementById('btnSaveExclusions').addEventListener('click', this.saveExclusions.bind(this));
                     document.getElementById('btnCancelExclusions').addEventListener('click', this.closeModal.bind(this));
+                    document.getElementById('btnUsersSelectAll').addEventListener('click', this.selectAllUsers.bind(this));
+                    document.getElementById('btnUsersResetDefaults').addEventListener('click', this.resetUserDefaults.bind(this));
+                    document.getElementById('btnUsersClearAll').addEventListener('click', this.clearAllUsers.bind(this));
+                    this.initialized = true;
                 },
 
                 openModal: function() {
@@ -205,6 +374,24 @@
                     document.getElementById('userExclusionList').innerHTML = listHtml;
                 },
 
+                selectAllUsers: function() {
+                    var checkboxes = document.querySelectorAll('#userExclusionList input[type="checkbox"]');
+                    checkboxes.forEach(function(checkbox) {
+                        checkbox.checked = true;
+                    });
+                },
+
+                resetUserDefaults: function() {
+                    this.selectAllUsers();
+                },
+
+                clearAllUsers: function() {
+                    var checkboxes = document.querySelectorAll('#userExclusionList input[type="checkbox"]');
+                    checkboxes.forEach(function(checkbox) {
+                        checkbox.checked = false;
+                    });
+                },
+
                 saveExclusions: function() {
                     Dashboard.showLoadingMsg();
 
@@ -237,11 +424,6 @@
                     });
                 }
             };
-
-            // Initialize on page show
-            document.getElementById('TranscodeNagConfigPage').addEventListener('pageshow', function() {
-                UserExclusionManager.init();
-            });
         </script>
     </div>
 </body>
