@@ -199,7 +199,7 @@ public class PlaybackMonitor : IHostedService
         }
 
         // Check if transcoding is due to unsupported format/codec
-        if (ShouldNagSession(transcodeInfo, config))
+        if (TranscodeNagRules.ShouldNagTranscode(transcodeInfo, config))
         {
             // Record the event
             RecordTranscodeEvent(session, transcodeInfo);
@@ -219,48 +219,6 @@ public class PlaybackMonitor : IHostedService
             var playbackKey = $"{e.Session.Id}_{e.Item.Id}";
             _naggedPlaybacks.Remove(playbackKey);
         }
-    }
-
-    private bool ShouldNagSession(TranscodingInfo transcodeInfo, Configuration.PluginConfiguration config)
-    {
-        var reasons = transcodeInfo.TranscodeReasons;
-
-        // If no transcode reasons specified, it's likely bitrate limiting - don't nag
-        if (reasons == (TranscodeReason)0)
-        {
-            return false;
-        }
-
-        var enabledNagReasons = BuildConfiguredNagReasonMask(config.AlertTranscodeReasons);
-        if (enabledNagReasons == (TranscodeReason)0)
-        {
-            return false;
-        }
-
-        return (reasons & enabledNagReasons) != 0;
-    }
-
-    private static TranscodeReason BuildConfiguredNagReasonMask(string[]? configuredReasonNames)
-    {
-        var selectedReasonNames = configuredReasonNames == null
-            ? Configuration.PluginConfiguration.GetDefaultAlertTranscodeReasons()
-            : configuredReasonNames;
-
-        var reasonMask = (TranscodeReason)0;
-        foreach (var reasonName in selectedReasonNames)
-        {
-            if (string.IsNullOrWhiteSpace(reasonName))
-            {
-                continue;
-            }
-
-            if (Enum.TryParse(reasonName, true, out TranscodeReason parsedReason))
-            {
-                reasonMask |= parsedReason;
-            }
-        }
-
-        return reasonMask;
     }
 
     private bool IsUserExcluded(Guid? userId)
@@ -473,9 +431,7 @@ public class PlaybackMonitor : IHostedService
 
         var userId = session.UserId.ToString();
 
-        // Calculate days based on time window setting
-        var days = config.LoginNagTimeWindow == "Month" ? 30 : 7;
-        var timeWindowText = config.LoginNagTimeWindow == "Month" ? "month" : "week";
+        var (days, timeWindowText) = TranscodeNagRules.ResolveLoginNagWindow(config.LoginNagTimeWindow);
 
         var status = await _eventStore.GetUserNagStatusAsync(userId, days).ConfigureAwait(false);
 
@@ -497,9 +453,10 @@ public class PlaybackMonitor : IHostedService
             return;
         }
 
-        var message = config.LoginNagMessage
-            .Replace("{{transcodes}}", status.BadTranscodeCount.ToString())
-            .Replace("{{timewindow}}", timeWindowText);
+        var message = TranscodeNagRules.FormatLoginNagMessage(
+            config.LoginNagMessage,
+            status.BadTranscodeCount,
+            timeWindowText);
 
         if (config.EnableLogging)
         {

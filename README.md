@@ -4,8 +4,8 @@
   <a href="https://github.com/voc0der/jellyfin-transcode-nag/releases/latest">
     <img src="https://img.shields.io/github/v/release/voc0der/jellyfin-transcode-nag?label=stable%20release" alt="Stable release version" />
   </a>
-  <a href="https://github.com/voc0der/jellyfin-transcode-nag">
-    <img src="https://img.shields.io/badge/coverage-no%20tests-lightgrey" alt="Code coverage not available because the repository has no automated tests" />
+  <a href="https://github.com/voc0der/jellyfin-transcode-nag/tree/main/tests">
+    <img src="https://img.shields.io/badge/coverage-30%25-red" alt="Code coverage percentage" />
   </a>
   <a href="https://github.com/voc0der/jellyfin-transcode-nag/issues">
     <img src="https://img.shields.io/github/issues/voc0der/jellyfin-transcode-nag?color=DAA520" alt="Open issues" />
