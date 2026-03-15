@@ -1,6 +1,22 @@
 # Jellyfin Transcode Nag Plugin
 
-[![Star History Chart](https://api.star-history.com/svg?repos=voc0der/jellyfin-transcode-nag&type=Date)](https://star-history.com/#voc0der/jellyfin-transcode-nag&Date)
+<p align="center">
+  <a href="https://github.com/voc0der/jellyfin-transcode-nag/releases/latest">
+    <img src="https://img.shields.io/github/v/release/voc0der/jellyfin-transcode-nag?label=stable%20release" alt="Stable release version" />
+  </a>
+  <a href="https://github.com/voc0der/jellyfin-transcode-nag">
+    <img src="https://img.shields.io/badge/coverage-no%20tests-lightgrey" alt="Code coverage not available because the repository has no automated tests" />
+  </a>
+  <a href="https://github.com/voc0der/jellyfin-transcode-nag/issues">
+    <img src="https://img.shields.io/github/issues/voc0der/jellyfin-transcode-nag?color=DAA520" alt="Open issues" />
+  </a>
+  <a href="LICENSE">
+    <img src="https://img.shields.io/github/license/voc0der/jellyfin-transcode-nag?color=97CA00" alt="License" />
+  </a>
+  <a href="https://github.com/voc0der/jellyfin-transcode-nag/blob/main/Jellyfin.Plugin.TranscodeNag.csproj">
+    <img src="https://img.shields.io/badge/dependencies-2%20outdated-orange" alt="Dependencies status" />
+  </a>
+</p>
 
 A Jellyfin plugin that intelligently nags users when they're transcoding due to **unsupported formats or codecs**, while allowing bitrate-based transcoding to pass through without harassment.
 
@@ -158,3 +174,15 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 ## License
 
 MIT License
+
+## Star History
+
+<p align="center">
+  <a href="https://star-history.com/#voc0der/jellyfin-transcode-nag&Date">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=voc0der/jellyfin-transcode-nag&type=Date&theme=dark" />
+      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=voc0der/jellyfin-transcode-nag&type=Date" />
+      <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=voc0der/jellyfin-transcode-nag&type=Date" />
+    </picture>
+  </a>
+</p>
