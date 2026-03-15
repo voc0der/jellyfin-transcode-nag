@@ -20,6 +20,20 @@
 
 A Jellyfin plugin that intelligently nags users when they're transcoding due to **unsupported formats or codecs**, while allowing bitrate-based transcoding to pass through without harassment.
 
+<p align="center">
+  <img src="docs/images/transcode-nag-playback-settings.png" alt="Transcode Nag playback settings and trigger reasons in the Jellyfin dashboard" width="880" />
+</p>
+<p align="center">
+  <em>Playback nag configuration and trigger reason selection</em>
+</p>
+
+<p align="center">
+  <img src="docs/images/transcode-nag-login-monitor.png" alt="Transcode Nag login settings, exclusions, and live session monitor in the Jellyfin dashboard" width="880" />
+</p>
+<p align="center">
+  <em>Login nags, user exclusions, and the live session monitor</em>
+</p>
+
 ## What It Does
 
 - Sends a playback nag when Jellyfin reports selected `TranscodeReasons`.
