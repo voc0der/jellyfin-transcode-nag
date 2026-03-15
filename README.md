@@ -70,10 +70,6 @@ Open **Dashboard** → **Plugins** → **Transcode Nag**.
 - Login nags are rate-limited and use stored history from the last 30 days.
 - If a user returns to direct play after a bad transcode, login nags are suppressed until they regress again.
 
-## License
-
-MIT License
-
 ## Star History
 
 <p align="center">
