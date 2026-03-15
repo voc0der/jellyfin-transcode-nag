@@ -37,7 +37,7 @@ A Jellyfin plugin that intelligently nags users when they're transcoding due to 
 3. Install **Transcode Nag** from **Catalog**
 4. Restart Jellyfin
 
-### Manual ZIP
+### Manual
 
 1. Download the latest ZIP from the [Releases page](https://github.com/voc0der/jellyfin-transcode-nag/releases/latest)
 2. Extract it into your Jellyfin plugins directory:
@@ -46,7 +46,7 @@ A Jellyfin plugin that intelligently nags users when they're transcoding due to 
    - Docker: `/config/plugins/`
 3. Restart Jellyfin
 
-### Build from Source
+#### Build from Source
 
 ```bash
 dotnet build --configuration Release
@@ -73,3 +73,15 @@ Open **Dashboard** → **Plugins** → **Transcode Nag**.
 ## License
 
 MIT License
+
+## Star History
+
+<p align="center">
+  <a href="https://star-history.com/#voc0der/jellyfin-transcode-nag&Date">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=voc0der/jellyfin-transcode-nag&type=Date&theme=dark" />
+      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=voc0der/jellyfin-transcode-nag&type=Date" />
+      <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=voc0der/jellyfin-transcode-nag&type=Date" />
+    </picture>
+  </a>
+</p>
