@@ -186,12 +186,18 @@ public class PlaybackMonitor : IHostedService
 
         var playbackKey = $"{session.Id}_{session.NowPlayingItem.Id}";
 
+        if (!IsClientAllowed(session, config, "playback nag"))
+        {
+            _naggedPlaybacks.Remove(playbackKey);
+            return;
+        }
+
         var transcodeInfo = session.TranscodingInfo;
         if (transcodeInfo == null || transcodeInfo.IsVideoDirect)
         {
             // Good playback (direct play / direct stream) - record a credit so users don't get dinged
             // on login/open nags until the next bad transcode.
-            RecordImprovementCreditIfNeeded(session);
+            RecordImprovementCreditIfNeeded(session, config);
 
             // Not transcoding - remove from nagged list if present
             _naggedPlaybacks.Remove(playbackKey);
@@ -236,6 +242,25 @@ public class PlaybackMonitor : IHostedService
 
         var userIdString = userId.Value.ToString("N");
         return Array.IndexOf(config.ExcludedUserIds, userIdString) >= 0;
+    }
+
+    private bool IsClientAllowed(SessionInfo session, Configuration.PluginConfiguration config, string context)
+    {
+        if (TranscodeNagRules.IsClientAllowed(session.Client, config))
+        {
+            return true;
+        }
+
+        if (config.EnableLogging)
+        {
+            _logger.LogInformation(
+                "Skipping {Context} for filtered client {Client} on session {SessionId}",
+                context,
+                session.Client ?? "Unknown",
+                session.Id ?? "Unknown");
+        }
+
+        return false;
     }
 
     private void SendNagMessage(SessionInfo session, Configuration.PluginConfiguration config)
@@ -318,7 +343,7 @@ public class PlaybackMonitor : IHostedService
         _eventStore.AddEvent(transcodeEvent);
     }
 
-    private void RecordImprovementCreditIfNeeded(SessionInfo session)
+    private void RecordImprovementCreditIfNeeded(SessionInfo session, Configuration.PluginConfiguration config)
     {
         if (session.UserId == Guid.Empty || session.NowPlayingItem == null)
         {
@@ -332,7 +357,10 @@ public class PlaybackMonitor : IHostedService
             // Fire-and-forget: GetUserNagStatusAsync takes a lock and reads the file.
             _ = Task.Run(async () =>
             {
-                var status = await _eventStore.GetUserNagStatusAsync(session.UserId.ToString(), 30).ConfigureAwait(false);
+                var status = await _eventStore.GetUserNagStatusAsync(
+                    session.UserId.ToString(),
+                    30,
+                    e => TranscodeNagRules.IsClientAllowed(e.Client, config)).ConfigureAwait(false);
 
                 if (!status.LastBadTranscodeUtc.HasValue)
                 {
@@ -429,11 +457,19 @@ public class PlaybackMonitor : IHostedService
             return;
         }
 
+        if (!IsClientAllowed(session, config, "login/open nag"))
+        {
+            return;
+        }
+
         var userId = session.UserId.ToString();
 
         var (days, timeWindowText) = TranscodeNagRules.ResolveLoginNagWindow(config.LoginNagTimeWindow);
 
-        var status = await _eventStore.GetUserNagStatusAsync(userId, days).ConfigureAwait(false);
+        var status = await _eventStore.GetUserNagStatusAsync(
+            userId,
+            days,
+            e => TranscodeNagRules.IsClientAllowed(e.Client, config)).ConfigureAwait(false);
 
         // Rate limit: only once per configured period.
         if (status.NaggedRecently)

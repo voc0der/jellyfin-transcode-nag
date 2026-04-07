@@ -52,6 +52,23 @@
                     </div>
                     <div id="transcodeReasonList" style="margin-bottom: 20px;"></div>
 
+                    <h2>Client Filters</h2>
+                    <div class="fieldDescription" style="margin-bottom: 12px;">
+                        Match clients using case-insensitive text. If the include list is empty, all clients are eligible. Excluded matches always win.
+                    </div>
+
+                    <div class="selectContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="txtIncludedClientPatterns">Only Include Matching Clients:</label>
+                        <textarea id="txtIncludedClientPatterns" name="txtIncludedClientPatterns" rows="3" class="emby-input"></textarea>
+                        <div class="fieldDescription">Optional. Enter one client match per line or comma, for example: Jellyfin Web, browser, moonfin.</div>
+                    </div>
+
+                    <div class="selectContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="txtExcludedClientPatterns">Exclude Matching Clients:</label>
+                        <textarea id="txtExcludedClientPatterns" name="txtExcludedClientPatterns" rows="3" class="emby-input"></textarea>
+                        <div class="fieldDescription">Optional. Matching clients will never receive playback or login nags, and their history will not count toward login nags.</div>
+                    </div>
+
                     <h2>Login Nag Settings</h2>
 
                     <div class="checkboxContainer checkboxContainer-withDescription">
@@ -273,12 +290,80 @@
                 }
             };
 
+            var ClientPatternEditor = {
+                splitPatterns: function(value) {
+                    if (!value) {
+                        return [];
+                    }
+
+                    var seen = {};
+                    var patterns = [];
+
+                    String(value).split(/\r?\n|,/).forEach(function(part) {
+                        var pattern = String(part || '').trim();
+                        var key = pattern.toLowerCase();
+                        if (!pattern || seen[key]) {
+                            return;
+                        }
+
+                        seen[key] = true;
+                        patterns.push(pattern);
+                    });
+
+                    return patterns;
+                },
+
+                formatPatterns: function(patterns) {
+                    if (!Array.isArray(patterns)) {
+                        return '';
+                    }
+
+                    return this.splitPatterns(patterns.join('\n')).join('\n');
+                },
+
+                hasPatterns: function(patterns) {
+                    return Array.isArray(patterns) && patterns.some(function(pattern) {
+                        return String(pattern || '').trim().length > 0;
+                    });
+                },
+
+                matchesAny: function(clientName, patterns) {
+                    if (!clientName || !Array.isArray(patterns)) {
+                        return false;
+                    }
+
+                    var normalizedClient = String(clientName).toLowerCase();
+                    for (var i = 0; i < patterns.length; i++) {
+                        var pattern = String(patterns[i] || '').trim().toLowerCase();
+                        if (pattern && normalizedClient.indexOf(pattern) !== -1) {
+                            return true;
+                        }
+                    }
+
+                    return false;
+                },
+
+                isClientAllowed: function(clientName, includedPatterns, excludedPatterns) {
+                    if (this.matchesAny(clientName, excludedPatterns)) {
+                        return false;
+                    }
+
+                    if (!this.hasPatterns(includedPatterns)) {
+                        return true;
+                    }
+
+                    return this.matchesAny(clientName, includedPatterns);
+                }
+            };
+
             var LiveSessionMonitor = {
                 initialized: false,
                 refreshTimer: null,
                 selectedReasonNames: [],
                 selectedReasonMap: {},
                 excludedUserMap: {},
+                includedClientPatterns: [],
+                excludedClientPatterns: [],
 
                 init: function() {
                     if (this.initialized) {
@@ -342,6 +427,13 @@
                             LiveSessionMonitor.excludedUserMap[key] = true;
                         }
                     });
+
+                    this.includedClientPatterns = Array.isArray(config.IncludedClientPatterns)
+                        ? ClientPatternEditor.splitPatterns(config.IncludedClientPatterns.join('\n'))
+                        : [];
+                    this.excludedClientPatterns = Array.isArray(config.ExcludedClientPatterns)
+                        ? ClientPatternEditor.splitPatterns(config.ExcludedClientPatterns.join('\n'))
+                        : [];
                 },
 
                 parseReasonNames: function(rawReasons) {
@@ -441,6 +533,10 @@
 
                     var normalizedUserId = this.normalizeId(session.UserId);
                     if (normalizedUserId && this.excludedUserMap[normalizedUserId]) {
+                        return false;
+                    }
+
+                    if (!ClientPatternEditor.isClientAllowed(session.Client, this.includedClientPatterns, this.excludedClientPatterns)) {
                         return false;
                     }
 
@@ -548,6 +644,8 @@
                     document.getElementById('txtDelaySeconds').value = config.DelaySeconds || 5;
                     document.getElementById('txtMessageTimeout').value = config.MessageTimeoutMs || 10000;
                     document.getElementById('chkEnableLogging').checked = config.EnableLogging || false;
+                    document.getElementById('txtIncludedClientPatterns').value = ClientPatternEditor.formatPatterns(config.IncludedClientPatterns);
+                    document.getElementById('txtExcludedClientPatterns').value = ClientPatternEditor.formatPatterns(config.ExcludedClientPatterns);
                     document.getElementById('chkEnableLoginNag').checked = config.EnableLoginNag !== false;
                     document.getElementById('txtLoginNagThreshold').value = config.LoginNagThreshold || 5;
                     document.getElementById('selectLoginNagTimeWindow').value = config.LoginNagTimeWindow || 'Week';
@@ -568,6 +666,8 @@
                     config.DelaySeconds = parseInt(document.getElementById('txtDelaySeconds').value);
                     config.MessageTimeoutMs = parseInt(document.getElementById('txtMessageTimeout').value);
                     config.EnableLogging = document.getElementById('chkEnableLogging').checked;
+                    config.IncludedClientPatterns = ClientPatternEditor.splitPatterns(document.getElementById('txtIncludedClientPatterns').value);
+                    config.ExcludedClientPatterns = ClientPatternEditor.splitPatterns(document.getElementById('txtExcludedClientPatterns').value);
                     config.EnableLoginNag = document.getElementById('chkEnableLoginNag').checked;
                     config.LoginNagThreshold = parseInt(document.getElementById('txtLoginNagThreshold').value);
                     config.LoginNagTimeWindow = document.getElementById('selectLoginNagTimeWindow').value;
