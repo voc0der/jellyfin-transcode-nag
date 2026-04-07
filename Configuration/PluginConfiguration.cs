@@ -51,5 +51,9 @@ public class PluginConfiguration : BasePluginConfiguration
 
     public string[] AlertTranscodeReasons { get; set; } = GetDefaultAlertTranscodeReasons();
 
+    public string[] IncludedClientPatterns { get; set; } = Array.Empty<string>();
+
+    public string[] ExcludedClientPatterns { get; set; } = Array.Empty<string>();
+
     public string[] ExcludedUserIds { get; set; } = Array.Empty<string>();
 }

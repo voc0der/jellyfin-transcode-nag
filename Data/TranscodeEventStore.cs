@@ -88,7 +88,7 @@ public class TranscodeEventStore
     /// <summary>
     /// Get stats used for login/open nags.
     /// </summary>
-    public async System.Threading.Tasks.Task<UserNagStatus> GetUserNagStatusAsync(string userId, int days)
+    public async System.Threading.Tasks.Task<UserNagStatus> GetUserNagStatusAsync(string userId, int days, Func<TranscodeEvent, bool>? eventFilter = null)
     {
         await _lock.WaitAsync().ConfigureAwait(false);
         try
@@ -97,7 +97,9 @@ public class TranscodeEventStore
             var now = DateTime.UtcNow;
             var cutoff = now.AddDays(-days);
 
-            var userEvents = events.Where(e => e.UserId == userId).ToList();
+            var userEvents = events
+                .Where(e => e.UserId == userId && (eventFilter == null || eventFilter(e)))
+                .ToList();
             var recentUserEvents = userEvents.Where(e => e.Timestamp >= cutoff).ToList();
 
             var badCount = recentUserEvents.Count(e => e.Kind == NagEventKind.BadTranscode);
@@ -154,7 +156,7 @@ public class TranscodeEventStore
         }
     }
 
-    public async System.Threading.Tasks.Task<List<TranscodeEvent>> GetUserEventsAsync(string userId, int days)
+    public async System.Threading.Tasks.Task<List<TranscodeEvent>> GetUserEventsAsync(string userId, int days, Func<TranscodeEvent, bool>? eventFilter = null)
     {
         await _lock.WaitAsync().ConfigureAwait(false);
         try
@@ -163,7 +165,7 @@ public class TranscodeEventStore
             var cutoff = DateTime.UtcNow.AddDays(-days);
 
             return events
-                .Where(e => e.UserId == userId && e.Timestamp >= cutoff)
+                .Where(e => e.UserId == userId && e.Timestamp >= cutoff && (eventFilter == null || eventFilter(e)))
                 .OrderByDescending(e => e.Timestamp)
                 .ToList();
         }

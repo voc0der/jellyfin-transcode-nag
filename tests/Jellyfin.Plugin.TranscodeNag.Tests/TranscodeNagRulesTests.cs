@@ -64,6 +64,34 @@ public class TranscodeNagRulesTests
     }
 
     [Fact]
+    public void IsClientAllowed_AllowsAllClientsWhenIncludeListIsEmpty()
+    {
+        var config = new PluginConfiguration
+        {
+            ExcludedClientPatterns = new[] { "android tv" }
+        };
+
+        Assert.True(TranscodeNagRules.IsClientAllowed("Jellyfin Web", config));
+        Assert.False(TranscodeNagRules.IsClientAllowed("Jellyfin Android TV", config));
+    }
+
+    [Fact]
+    public void IsClientAllowed_RequiresIncludeMatchAndTreatsExcludeAsStronger()
+    {
+        var config = new PluginConfiguration
+        {
+            IncludedClientPatterns = new[] { " web ", "browser" },
+            ExcludedClientPatterns = new[] { "chrome" }
+        };
+
+        Assert.True(TranscodeNagRules.IsClientAllowed("Jellyfin Web", config));
+        Assert.True(TranscodeNagRules.IsClientAllowed("Firefox Browser", config));
+        Assert.False(TranscodeNagRules.IsClientAllowed("Jellyfin Android TV", config));
+        Assert.False(TranscodeNagRules.IsClientAllowed("Chrome Web", config));
+        Assert.False(TranscodeNagRules.IsClientAllowed(null, config));
+    }
+
+    [Fact]
     public void ResolveLoginNagWindow_MapsMonthAndFallsBackToWeek()
     {
         Assert.Equal((30, "month"), TranscodeNagRules.ResolveLoginNagWindow("Month"));

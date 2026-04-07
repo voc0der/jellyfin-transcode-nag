@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Jellyfin.Plugin.TranscodeNag.Configuration;
 using MediaBrowser.Model.Session;
 
@@ -25,6 +26,51 @@ internal static class TranscodeNagRules
         }
 
         return reasonMask;
+    }
+
+    internal static bool HasConfiguredClientPatterns(string[]? configuredPatterns)
+    {
+        return configuredPatterns?.Any(pattern => !string.IsNullOrWhiteSpace(pattern)) == true;
+    }
+
+    internal static bool MatchesConfiguredClientPatterns(string? clientName, string[]? configuredPatterns)
+    {
+        if (string.IsNullOrWhiteSpace(clientName) || configuredPatterns == null)
+        {
+            return false;
+        }
+
+        foreach (var pattern in configuredPatterns)
+        {
+            if (string.IsNullOrWhiteSpace(pattern))
+            {
+                continue;
+            }
+
+            if (clientName.IndexOf(pattern.Trim(), StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    internal static bool IsClientAllowed(string? clientName, PluginConfiguration config)
+    {
+        ArgumentNullException.ThrowIfNull(config);
+
+        if (MatchesConfiguredClientPatterns(clientName, config.ExcludedClientPatterns))
+        {
+            return false;
+        }
+
+        if (!HasConfiguredClientPatterns(config.IncludedClientPatterns))
+        {
+            return true;
+        }
+
+        return MatchesConfiguredClientPatterns(clientName, config.IncludedClientPatterns);
     }
 
     internal static bool ShouldNagTranscode(TranscodingInfo transcodeInfo, PluginConfiguration config)
