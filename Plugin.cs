@@ -18,7 +18,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
 
     public override string Name => "Transcode Nag";
 
-    public override Guid Id => Guid.Parse("a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d");
+    public override Guid Id => Guid.Parse("fdcf27a6-bd64-42e3-9f57-41880552bf83");
 
     public override string Description => "Nags users when they transcode due to unsupported formats (but allows bitrate transcoding)";
 

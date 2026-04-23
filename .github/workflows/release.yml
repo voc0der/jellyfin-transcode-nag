@@ -61,6 +61,14 @@ jobs:
         echo "## What's Changed" > CHANGELOG.md
         echo "" >> CHANGELOG.md
 
+        if [ "$NEW_VERSION" = "v1.0.1.22" ]; then
+          echo "## !BREAKING!" >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "- This release changes the plugin GUID to resolve a collision with another Jellyfin plugin." >> CHANGELOG.md
+          echo "- Jellyfin will treat 1.0.1.22 as a new plugin identity, so you will need to reconfigure the plugin after installing this version." >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+        fi
+
         if [ "$LATEST_TAG" != "1.0.0.0" ] || git rev-parse "$LATEST_TAG" >/dev/null 2>&1; then
           git log ${LATEST_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges >> CHANGELOG.md
         else
@@ -138,7 +146,7 @@ jobs:
         git config user.name "voc0der"
         git config user.email "contact@netspace.in"
         git add manifest.json
-        git commit -m "Update manifest.json for version ${{ steps.version.outputs.version }}" || echo "No changes to commit"
+        git commit -m "Update manifest.json for version ${{ steps.version.outputs.version }} [skip ci]" || echo "No changes to commit"
         git push || echo "No changes to push"
 
     - name: Create Release
