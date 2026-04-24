@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using MediaBrowser.Model.Plugins;
 using MediaBrowser.Model.Session;
 
@@ -50,6 +51,8 @@ public class PluginConfiguration : BasePluginConfiguration
     public string LoginNagMessage { get; set; } = "You've transcoded {{transcodes}} videos in the last {{timewindow}} due to unsupported formats. Consider switching to mpv, VLC, or Jellyfin Media Player to improve quality and reduce server load!";
 
     public string[] AlertTranscodeReasons { get; set; } = GetDefaultAlertTranscodeReasons();
+
+    public Dictionary<string, string> ReasonMessageOverrides { get; set; } = new Dictionary<string, string>();
 
     public string[] IncludedClientPatterns { get; set; } = Array.Empty<string>();
 

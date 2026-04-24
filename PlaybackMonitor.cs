@@ -263,6 +263,33 @@ public class PlaybackMonitor : IHostedService
         return false;
     }
 
+    private static string ResolveNagMessage(SessionInfo session, Configuration.PluginConfiguration config)
+    {
+        var transcodeInfo = session.TranscodingInfo;
+        var overrides = config.ReasonMessageOverrides;
+
+        if (transcodeInfo != null && overrides != null && overrides.Count > 0 && config.AlertTranscodeReasons != null)
+        {
+            foreach (var reasonName in config.AlertTranscodeReasons)
+            {
+                if (string.IsNullOrWhiteSpace(reasonName))
+                {
+                    continue;
+                }
+
+                if (Enum.TryParse<TranscodeReason>(reasonName, true, out var parsedReason)
+                    && (transcodeInfo.TranscodeReasons & parsedReason) != 0
+                    && overrides.TryGetValue(reasonName, out var overrideMsg)
+                    && !string.IsNullOrWhiteSpace(overrideMsg))
+                {
+                    return overrideMsg;
+                }
+            }
+        }
+
+        return config.NagMessage;
+    }
+
     private void SendNagMessage(SessionInfo session, Configuration.PluginConfiguration config)
     {
         if (session.Id == null)
@@ -302,7 +329,7 @@ public class PlaybackMonitor : IHostedService
                 new MessageCommand
                 {
                     Header = "Transcoding Detected",
-                    Text = config.NagMessage,
+                    Text = ResolveNagMessage(session, config),
                     TimeoutMs = config.MessageTimeoutMs
                 },
                 CancellationToken.None);

@@ -172,6 +172,15 @@
                 pluginId: "fdcf27a6-bd64-42e3-9f57-41880552bf83"
             };
 
+            function escapeHtml(text) {
+                return String(text || '')
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+            }
+
             var ReasonSelector = {
                 initialized: false,
                 reasonOptions: [
@@ -227,7 +236,7 @@
                     this.initialized = true;
                 },
 
-                render: function(selectedReasonNames) {
+                render: function(selectedReasonNames, reasonMessageOverrides) {
                     var selected = Array.isArray(selectedReasonNames)
                         ? selectedReasonNames
                         : this.defaultReasonNames;
@@ -235,24 +244,37 @@
                     selected.forEach(function(name) {
                         selectedMap[name] = true;
                     });
+                    var overrides = (reasonMessageOverrides && typeof reasonMessageOverrides === 'object') ? reasonMessageOverrides : {};
 
                     var listHtml = '';
                     this.reasonOptions.forEach(function(reason) {
                         var isChecked = !!selectedMap[reason.name];
+                        var hasOverride = !!(overrides[reason.name]);
+                        var overrideText = overrides[reason.name] || '';
                         listHtml += '<div class="checkboxContainer checkboxContainer-withDescription" style="margin-bottom: 8px;">';
                         listHtml += '<label>';
                         listHtml += '<input type="checkbox" is="emby-checkbox" data-reason-name="' + reason.name + '" ' + (isChecked ? 'checked' : '') + ' />';
                         listHtml += '<span>' + reason.label + '</span>';
                         listHtml += '</label>';
                         listHtml += '<div class="fieldDescription checkboxFieldDescription">' + reason.description + '</div>';
+                        listHtml += '<div style="margin-top: 6px; margin-left: 32px;">';
+                        listHtml += '<label>';
+                        listHtml += '<input type="checkbox" is="emby-checkbox" data-reason-override-toggle="' + reason.name + '" ' + (hasOverride ? 'checked' : '') + ' />';
+                        listHtml += '<span style="font-size: 0.9em;">Override message for this reason</span>';
+                        listHtml += '</label>';
+                        listHtml += '<div data-reason-override-container="' + reason.name + '" style="display: ' + (hasOverride ? 'block' : 'none') + '; margin-top: 6px;">';
+                        listHtml += '<textarea data-reason-override-text="' + reason.name + '" rows="2" class="emby-input" style="width: 100%;" placeholder="Custom message for this reason (overrides the default nag message)...">' + escapeHtml(overrideText) + '</textarea>';
+                        listHtml += '</div>';
+                        listHtml += '</div>';
                         listHtml += '</div>';
                     });
 
                     document.getElementById('transcodeReasonList').innerHTML = listHtml;
+                    this.initOverrideToggles();
                 },
 
                 selectAll: function() {
-                    var checkboxes = document.querySelectorAll('#transcodeReasonList input[type="checkbox"]');
+                    var checkboxes = document.querySelectorAll('#transcodeReasonList input[data-reason-name]');
                     checkboxes.forEach(function(checkbox) {
                         checkbox.checked = true;
                     });
@@ -264,7 +286,7 @@
                         selectedMap[name] = true;
                     });
 
-                    var checkboxes = document.querySelectorAll('#transcodeReasonList input[type="checkbox"]');
+                    var checkboxes = document.querySelectorAll('#transcodeReasonList input[data-reason-name]');
                     checkboxes.forEach(function(checkbox) {
                         var reasonName = checkbox.getAttribute('data-reason-name');
                         checkbox.checked = !!selectedMap[reasonName];
@@ -272,7 +294,7 @@
                 },
 
                 clearAll: function() {
-                    var checkboxes = document.querySelectorAll('#transcodeReasonList input[type="checkbox"]');
+                    var checkboxes = document.querySelectorAll('#transcodeReasonList input[data-reason-name]');
                     checkboxes.forEach(function(checkbox) {
                         checkbox.checked = false;
                     });
@@ -280,13 +302,44 @@
 
                 getSelectedReasonNames: function() {
                     var selected = [];
-                    var checkboxes = document.querySelectorAll('#transcodeReasonList input[type="checkbox"]');
+                    var checkboxes = document.querySelectorAll('#transcodeReasonList input[data-reason-name]');
                     checkboxes.forEach(function(checkbox) {
                         if (checkbox.checked) {
                             selected.push(checkbox.getAttribute('data-reason-name'));
                         }
                     });
                     return selected;
+                },
+
+                initOverrideToggles: function() {
+                    var toggles = document.querySelectorAll('#transcodeReasonList input[data-reason-override-toggle]');
+                    toggles.forEach(function(toggle) {
+                        var reasonName = toggle.getAttribute('data-reason-override-toggle');
+                        toggle.addEventListener('change', function() {
+                            var container = document.querySelector('[data-reason-override-container="' + reasonName + '"]');
+                            if (container) {
+                                container.style.display = toggle.checked ? 'block' : 'none';
+                            }
+                        });
+                    });
+                },
+
+                getReasonMessageOverrides: function() {
+                    var overrides = {};
+                    var toggles = document.querySelectorAll('#transcodeReasonList input[data-reason-override-toggle]');
+                    toggles.forEach(function(toggle) {
+                        if (toggle.checked) {
+                            var reasonName = toggle.getAttribute('data-reason-override-toggle');
+                            var textArea = document.querySelector('[data-reason-override-text="' + reasonName + '"]');
+                            if (textArea) {
+                                var text = textArea.value.trim();
+                                if (text) {
+                                    overrides[reasonName] = text;
+                                }
+                            }
+                        }
+                    });
+                    return overrides;
                 }
             };
 
@@ -650,7 +703,7 @@
                     document.getElementById('txtLoginNagThreshold').value = config.LoginNagThreshold || 5;
                     document.getElementById('selectLoginNagTimeWindow').value = config.LoginNagTimeWindow || 'Week';
                     document.getElementById('txtLoginNagMessage').value = config.LoginNagMessage || '';
-                    ReasonSelector.render(config.AlertTranscodeReasons);
+                    ReasonSelector.render(config.AlertTranscodeReasons, config.ReasonMessageOverrides);
                     LiveSessionMonitor.refresh(false, config);
                     LiveSessionMonitor.startRefreshTimer();
                     Dashboard.hideLoadingMsg();
@@ -673,6 +726,7 @@
                     config.LoginNagTimeWindow = document.getElementById('selectLoginNagTimeWindow').value;
                     config.LoginNagMessage = document.getElementById('txtLoginNagMessage').value;
                     config.AlertTranscodeReasons = ReasonSelector.getSelectedReasonNames();
+                    config.ReasonMessageOverrides = ReasonSelector.getReasonMessageOverrides();
 
                     ApiClient.updatePluginConfiguration(TranscodeNagConfig.pluginId, config).then(function (result) {
                         Dashboard.processPluginConfigurationUpdateResult(result);
