@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using MediaBrowser.Model.Plugins;
 using MediaBrowser.Model.Session;
 
@@ -52,11 +51,18 @@ public class PluginConfiguration : BasePluginConfiguration
 
     public string[] AlertTranscodeReasons { get; set; } = GetDefaultAlertTranscodeReasons();
 
-    public Dictionary<string, string> ReasonMessageOverrides { get; set; } = new Dictionary<string, string>();
+    public ReasonMessageOverride[] ReasonMessageOverrides { get; set; } = Array.Empty<ReasonMessageOverride>();
 
     public string[] IncludedClientPatterns { get; set; } = Array.Empty<string>();
 
     public string[] ExcludedClientPatterns { get; set; } = Array.Empty<string>();
 
     public string[] ExcludedUserIds { get; set; } = Array.Empty<string>();
+}
+
+public class ReasonMessageOverride
+{
+    public string ReasonName { get; set; } = string.Empty;
+
+    public string Message { get; set; } = string.Empty;
 }

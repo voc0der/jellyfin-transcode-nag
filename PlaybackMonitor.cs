@@ -268,7 +268,7 @@ public class PlaybackMonitor : IHostedService
         var transcodeInfo = session.TranscodingInfo;
         var overrides = config.ReasonMessageOverrides;
 
-        if (transcodeInfo != null && overrides != null && overrides.Count > 0 && config.AlertTranscodeReasons != null)
+        if (transcodeInfo != null && overrides != null && overrides.Length > 0 && config.AlertTranscodeReasons != null)
         {
             foreach (var reasonName in config.AlertTranscodeReasons)
             {
@@ -278,11 +278,17 @@ public class PlaybackMonitor : IHostedService
                 }
 
                 if (Enum.TryParse<TranscodeReason>(reasonName, true, out var parsedReason)
-                    && (transcodeInfo.TranscodeReasons & parsedReason) != 0
-                    && overrides.TryGetValue(reasonName, out var overrideMsg)
-                    && !string.IsNullOrWhiteSpace(overrideMsg))
+                    && (transcodeInfo.TranscodeReasons & parsedReason) != 0)
                 {
-                    return overrideMsg;
+                    foreach (var overrideEntry in overrides)
+                    {
+                        if (overrideEntry != null
+                            && string.Equals(overrideEntry.ReasonName, reasonName, StringComparison.OrdinalIgnoreCase)
+                            && !string.IsNullOrWhiteSpace(overrideEntry.Message))
+                        {
+                            return overrideEntry.Message;
+                        }
+                    }
                 }
             }
         }

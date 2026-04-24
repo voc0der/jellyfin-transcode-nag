@@ -236,6 +236,33 @@
                     this.initialized = true;
                 },
 
+                normalizeReasonMessageOverrides: function(reasonMessageOverrides) {
+                    var overrides = {};
+
+                    if (Array.isArray(reasonMessageOverrides)) {
+                        reasonMessageOverrides.forEach(function(entry) {
+                            if (!entry) {
+                                return;
+                            }
+
+                            var reasonName = entry.ReasonName || entry.reasonName || entry.Name || entry.name;
+                            var message = entry.Message || entry.message || entry.Value || entry.value;
+                            if (reasonName && message) {
+                                overrides[String(reasonName)] = String(message);
+                            }
+                        });
+                    } else if (reasonMessageOverrides && typeof reasonMessageOverrides === 'object') {
+                        Object.keys(reasonMessageOverrides).forEach(function(reasonName) {
+                            var message = reasonMessageOverrides[reasonName];
+                            if (message) {
+                                overrides[reasonName] = String(message);
+                            }
+                        });
+                    }
+
+                    return overrides;
+                },
+
                 render: function(selectedReasonNames, reasonMessageOverrides) {
                     var selected = Array.isArray(selectedReasonNames)
                         ? selectedReasonNames
@@ -244,7 +271,7 @@
                     selected.forEach(function(name) {
                         selectedMap[name] = true;
                     });
-                    var overrides = (reasonMessageOverrides && typeof reasonMessageOverrides === 'object') ? reasonMessageOverrides : {};
+                    var overrides = this.normalizeReasonMessageOverrides(reasonMessageOverrides);
 
                     var listHtml = '';
                     this.reasonOptions.forEach(function(reason) {
@@ -325,7 +352,7 @@
                 },
 
                 getReasonMessageOverrides: function() {
-                    var overrides = {};
+                    var overrides = [];
                     var toggles = document.querySelectorAll('#transcodeReasonList input[data-reason-override-toggle]');
                     toggles.forEach(function(toggle) {
                         if (toggle.checked) {
@@ -334,7 +361,10 @@
                             if (textArea) {
                                 var text = textArea.value.trim();
                                 if (text) {
-                                    overrides[reasonName] = text;
+                                    overrides.push({
+                                        ReasonName: reasonName,
+                                        Message: text
+                                    });
                                 }
                             }
                         }
