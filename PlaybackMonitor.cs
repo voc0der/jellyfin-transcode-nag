@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Jellyfin.Plugin.TranscodeNag.Data;
 using Jellyfin.Plugin.TranscodeNag.Models;
 using MediaBrowser.Common.Configuration;
+using MediaBrowser.Common.Extensions;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Session;
@@ -167,54 +168,61 @@ public class PlaybackMonitor : IHostedService
 
     private async void OnPlaybackStart(object? sender, PlaybackProgressEventArgs e)
     {
-        if (Plugin.Instance == null || e.Session == null)
+        try
         {
-            return;
-        }
-
-        var config = Plugin.Instance.Configuration;
-
-        // Wait for transcoding info to be available
-        await Task.Delay(config.DelaySeconds * 1000).ConfigureAwait(false);
-
-        // Re-fetch session to get updated transcoding info
-        var session = _sessionManager.Sessions.FirstOrDefault(s => s.Id == e.Session.Id);
-        if (session == null || session.NowPlayingItem == null)
-        {
-            return;
-        }
-
-        var playbackKey = $"{session.Id}_{session.NowPlayingItem.Id}";
-
-        if (!IsClientAllowed(session, config, "playback nag"))
-        {
-            _naggedPlaybacks.Remove(playbackKey);
-            return;
-        }
-
-        var transcodeInfo = session.TranscodingInfo;
-        if (transcodeInfo == null || transcodeInfo.IsVideoDirect)
-        {
-            // Good playback (direct play / direct stream) - record a credit so users don't get dinged
-            // on login/open nags until the next bad transcode.
-            RecordImprovementCreditIfNeeded(session, config);
-
-            // Not transcoding - remove from nagged list if present
-            _naggedPlaybacks.Remove(playbackKey);
-            return;
-        }
-
-        // Check if transcoding is due to unsupported format/codec
-        if (TranscodeNagRules.ShouldNagTranscode(transcodeInfo, config))
-        {
-            // Record the event
-            RecordTranscodeEvent(session, transcodeInfo);
-
-            if (!_naggedPlaybacks.Contains(playbackKey))
+            if (Plugin.Instance == null || e.Session == null)
             {
-                SendNagMessage(session, config);
-                _naggedPlaybacks.Add(playbackKey);
+                return;
             }
+
+            var config = Plugin.Instance.Configuration;
+
+            // Wait for transcoding info to be available
+            await Task.Delay(config.DelaySeconds * 1000).ConfigureAwait(false);
+
+            // Re-fetch session to get updated transcoding info
+            var session = _sessionManager.Sessions.FirstOrDefault(s => s.Id == e.Session.Id);
+            if (session == null || session.NowPlayingItem == null)
+            {
+                return;
+            }
+
+            var playbackKey = $"{session.Id}_{session.NowPlayingItem.Id}";
+
+            if (!IsClientAllowed(session, config, "playback nag"))
+            {
+                _naggedPlaybacks.Remove(playbackKey);
+                return;
+            }
+
+            var transcodeInfo = session.TranscodingInfo;
+            if (transcodeInfo == null || transcodeInfo.IsVideoDirect)
+            {
+                // Good playback (direct play / direct stream) - record a credit so users don't get dinged
+                // on login/open nags until the next bad transcode.
+                RecordImprovementCreditIfNeeded(session, config);
+
+                // Not transcoding - remove from nagged list if present
+                _naggedPlaybacks.Remove(playbackKey);
+                return;
+            }
+
+            // Check if transcoding is due to unsupported format/codec
+            if (TranscodeNagRules.ShouldNagTranscode(transcodeInfo, config))
+            {
+                // Record the event
+                RecordTranscodeEvent(session, transcodeInfo);
+
+                if (!_naggedPlaybacks.Contains(playbackKey))
+                {
+                    await SendNagMessageAsync(session, config).ConfigureAwait(false);
+                    _naggedPlaybacks.Add(playbackKey);
+                }
+            }
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            _logger.LogError(ex, "Error handling playback-start nag");
         }
     }
 
@@ -296,7 +304,7 @@ public class PlaybackMonitor : IHostedService
         return config.NagMessage;
     }
 
-    private void SendNagMessage(SessionInfo session, Configuration.PluginConfiguration config)
+    private async Task SendNagMessageAsync(SessionInfo session, Configuration.PluginConfiguration config)
     {
         if (session.Id == null)
         {
@@ -316,42 +324,150 @@ public class PlaybackMonitor : IHostedService
             return;
         }
 
+        var transcodeReasons = session.TranscodingInfo?.TranscodeReasons.ToString() ?? "Unknown";
+
+        await SendMessageCommandWithDiagnosticsAsync(
+            session,
+            config,
+            new MessageCommand
+            {
+                Header = "Transcoding Detected",
+                Text = ResolveNagMessage(session, config),
+                TimeoutMs = config.MessageTimeoutMs
+            },
+            "playback nag",
+            $"Reasons: {transcodeReasons}").ConfigureAwait(false);
+    }
+
+    private async Task<bool> SendMessageCommandWithDiagnosticsAsync(
+        SessionInfo session,
+        Configuration.PluginConfiguration config,
+        MessageCommand command,
+        string context,
+        string detail)
+    {
+        if (session.Id == null)
+        {
+            return false;
+        }
+
+        LogMessageDeliveryDiagnostics(session, config, context, detail);
+
         try
         {
-            var transcodeReasons = session.TranscodingInfo?.TranscodeReasons.ToString() ?? "Unknown";
+            await _sessionManager.SendMessageCommand(
+                null,
+                session.Id,
+                command,
+                CancellationToken.None).ConfigureAwait(false);
 
             if (config.EnableLogging)
             {
                 _logger.LogInformation(
-                    "Sending nag message to session {SessionId} ({Client}) - Reasons: {Reasons}",
-                    session.Id,
-                    session.Client ?? "Unknown",
-                    transcodeReasons);
+                    "Completed {Context} message send to session {SessionId}",
+                    context,
+                    session.Id);
             }
 
-            _sessionManager.SendMessageCommand(
-                null,
-                session.Id,
-                new MessageCommand
-                {
-                    Header = "Transcoding Detected",
-                    Text = ResolveNagMessage(session, config),
-                    TimeoutMs = config.MessageTimeoutMs
-                },
-                CancellationToken.None);
+            return true;
+        }
+        catch (ResourceNotFoundException ex)
+        {
+            _logger.LogError(ex, "Error sending {Context} message to session {SessionId}", context, session.Id);
         }
         catch (ObjectDisposedException ex)
         {
-            _logger.LogError(ex, "Error sending nag message to session {SessionId}", session.Id);
+            _logger.LogError(ex, "Error sending {Context} message to session {SessionId}", context, session.Id);
         }
         catch (InvalidOperationException ex)
         {
-            _logger.LogError(ex, "Error sending nag message to session {SessionId}", session.Id);
+            _logger.LogError(ex, "Error sending {Context} message to session {SessionId}", context, session.Id);
         }
         catch (OperationCanceledException ex)
         {
-            _logger.LogError(ex, "Error sending nag message to session {SessionId}", session.Id);
+            _logger.LogError(ex, "Error sending {Context} message to session {SessionId}", context, session.Id);
         }
+        catch (ArgumentException ex)
+        {
+            _logger.LogError(ex, "Error sending {Context} message to session {SessionId}", context, session.Id);
+        }
+
+        return false;
+    }
+
+    private void LogMessageDeliveryDiagnostics(
+        SessionInfo session,
+        Configuration.PluginConfiguration config,
+        string context,
+        string detail)
+    {
+        if (!config.EnableLogging)
+        {
+            return;
+        }
+
+        var (controllerCount, activeControllerCount, mediaControlControllerCount) = GetSessionControllerStats(session);
+        var supportedCommands = FormatSupportedCommands(session.SupportedCommands);
+        var supportsDisplayMessage = session.SupportedCommands?.Contains(GeneralCommandType.DisplayMessage) == true;
+
+        _logger.LogInformation(
+            "Sending {Context} message to session {SessionId} ({Client} {ApplicationVersion}) for user {UserName} on device {DeviceName} ({DeviceId}) - {Detail}; Controllers: {ControllerCount} total, {ActiveControllerCount} active, {MediaControlControllerCount} media-control; SupportsRemoteControl: {SupportsRemoteControl}; SupportsMediaControl: {SupportsMediaControl}; SupportsDisplayMessage: {SupportsDisplayMessage}; SupportedCommands: {SupportedCommands}",
+            context,
+            session.Id ?? "Unknown",
+            session.Client ?? "Unknown",
+            session.ApplicationVersion ?? "Unknown",
+            session.UserName ?? "Unknown",
+            session.DeviceName ?? "Unknown",
+            session.DeviceId ?? "Unknown",
+            detail,
+            controllerCount,
+            activeControllerCount,
+            mediaControlControllerCount,
+            session.SupportsRemoteControl,
+            session.SupportsMediaControl,
+            supportsDisplayMessage,
+            supportedCommands);
+
+        if (controllerCount == 0 || activeControllerCount == 0)
+        {
+            _logger.LogWarning(
+                "{Context} target session {SessionId} has {ControllerCount} controller(s) and {ActiveControllerCount} active controller(s). Jellyfin may accept the command without any client receiving a popup; check WebSocket/reverse proxy/client session state.",
+                context,
+                session.Id ?? "Unknown",
+                controllerCount,
+                activeControllerCount);
+        }
+        else if (!supportsDisplayMessage)
+        {
+            _logger.LogWarning(
+                "{Context} target session {SessionId} does not advertise DisplayMessage support. The client may ignore the nag popup.",
+                context,
+                session.Id ?? "Unknown");
+        }
+    }
+
+    private static (int ControllerCount, int ActiveControllerCount, int MediaControlControllerCount) GetSessionControllerStats(SessionInfo session)
+    {
+        var controllers = session.SessionControllers;
+        if (controllers == null)
+        {
+            return (0, 0, 0);
+        }
+
+        return (
+            controllers.Count,
+            controllers.Count(controller => controller.IsSessionActive),
+            controllers.Count(controller => controller.SupportsMediaControl));
+    }
+
+    private static string FormatSupportedCommands(IReadOnlyList<GeneralCommandType>? supportedCommands)
+    {
+        if (supportedCommands == null || supportedCommands.Count == 0)
+        {
+            return "None";
+        }
+
+        return string.Join(", ", supportedCommands);
     }
 
     private void RecordTranscodeEvent(SessionInfo session, TranscodingInfo transcodeInfo)
@@ -527,25 +643,22 @@ public class PlaybackMonitor : IHostedService
             status.BadTranscodeCount,
             timeWindowText);
 
-        if (config.EnableLogging)
-        {
-            _logger.LogInformation(
-                "Sending login/open nag to user {UserId} - {Count} bad transcodes in last {TimeWindow}",
-                userId,
-                status.BadTranscodeCount,
-                timeWindowText);
-        }
-
-        await _sessionManager.SendMessageCommand(
-            null,
-            session.Id,
+        var sent = await SendMessageCommandWithDiagnosticsAsync(
+            session,
+            config,
             new MessageCommand
             {
                 Header = "Transcoding Alert",
                 Text = message,
                 TimeoutMs = config.MessageTimeoutMs
             },
-            CancellationToken.None);
+            "login/open nag",
+            $"{status.BadTranscodeCount} bad transcodes in last {timeWindowText}").ConfigureAwait(false);
+
+        if (!sent)
+        {
+            return;
+        }
 
         // Persist the rate-limit marker.
         _eventStore.AddEvent(new TranscodeEvent
