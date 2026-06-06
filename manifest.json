@@ -6,6 +6,7 @@
     "description": "Intelligently nags users when they transcode due to unsupported formats/codecs, while allowing bitrate-based transcoding without harassment.",
     "owner": "voc0der",
     "overview": "Smart transcoding monitor that only nags for format/codec incompatibility",
+    "imageUrl": "https://raw.githubusercontent.com/voc0der/jellyfin-transcode-nag/main/icon.png",
     "versions": [
       {
         "version": "1.0.1.25",

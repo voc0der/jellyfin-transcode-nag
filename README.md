@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="icon.png" alt="jellyfin-transcode-nag icon" width="180" />
+</p>
+
 # Jellyfin Transcode Nag Plugin
 
 <p align="center">
