@@ -19,6 +19,8 @@ public class TranscodeEvent
 
     public string Client { get; set; } = string.Empty;
 
+    public bool IsLiveTv { get; set; }
+
     /// <summary>
     /// What kind of event this is.
     /// </summary>

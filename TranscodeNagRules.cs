@@ -1,6 +1,9 @@
 using System;
 using System.Linq;
+using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.TranscodeNag.Configuration;
+using Jellyfin.Plugin.TranscodeNag.Models;
+using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Session;
 
 namespace Jellyfin.Plugin.TranscodeNag;
@@ -71,6 +74,40 @@ internal static class TranscodeNagRules
         }
 
         return MatchesConfiguredClientPatterns(clientName, config.IncludedClientPatterns);
+    }
+
+    internal static bool IsLiveTvItem(BaseItemDto? item)
+    {
+        if (item == null)
+        {
+            return false;
+        }
+
+        if (item.IsLive == true)
+        {
+            return true;
+        }
+
+        return item.Type == BaseItemKind.TvChannel
+            || item.Type == BaseItemKind.TvProgram
+            || item.Type == BaseItemKind.LiveTvChannel
+            || item.Type == BaseItemKind.LiveTvProgram;
+    }
+
+    internal static bool IsItemAllowed(BaseItemDto? item, PluginConfiguration config)
+    {
+        ArgumentNullException.ThrowIfNull(config);
+
+        return !config.ExcludeLiveTv || !IsLiveTvItem(item);
+    }
+
+    internal static bool IsStoredEventAllowed(TranscodeEvent transcodeEvent, PluginConfiguration config)
+    {
+        ArgumentNullException.ThrowIfNull(transcodeEvent);
+        ArgumentNullException.ThrowIfNull(config);
+
+        return IsClientAllowed(transcodeEvent.Client, config)
+            && (!config.ExcludeLiveTv || !transcodeEvent.IsLiveTv);
     }
 
     internal static bool ShouldNagTranscode(TranscodingInfo transcodeInfo, PluginConfiguration config)
