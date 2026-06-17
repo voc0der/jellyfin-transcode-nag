@@ -35,6 +35,14 @@
                         <div class="fieldDescription checkboxFieldDescription">Log when nag messages are sent (helpful for debugging).</div>
                     </div>
 
+                    <div class="checkboxContainer checkboxContainer-withDescription">
+                        <label>
+                            <input type="checkbox" is="emby-checkbox" id="chkExcludeLiveTv" name="chkExcludeLiveTv" />
+                            <span>Exclude Live TV</span>
+                        </label>
+                        <div class="fieldDescription checkboxFieldDescription">Do not nag Live TV channel playback or count it toward login nags.</div>
+                    </div>
+
                     <h2>Playback Trigger Reasons</h2>
                     <div class="fieldDescription" style="margin-bottom: 12px;">
                         Select which transcoding reasons should trigger nag events. These choices apply to both playback nags and login nag history.
@@ -447,6 +455,7 @@
                 excludedUserMap: {},
                 includedClientPatterns: [],
                 excludedClientPatterns: [],
+                excludeLiveTv: false,
 
                 init: function() {
                     if (this.initialized) {
@@ -517,6 +526,23 @@
                     this.excludedClientPatterns = Array.isArray(config.ExcludedClientPatterns)
                         ? ClientPatternEditor.splitPatterns(config.ExcludedClientPatterns.join('\n'))
                         : [];
+                    this.excludeLiveTv = config.ExcludeLiveTv === true;
+                },
+
+                isLiveTvItem: function(item) {
+                    if (!item) {
+                        return false;
+                    }
+
+                    if (item.IsLive === true || item.isLive === true) {
+                        return true;
+                    }
+
+                    var itemType = String(item.Type || item.type || '').toLowerCase();
+                    return itemType === 'tvchannel'
+                        || itemType === 'tvprogram'
+                        || itemType === 'livetvchannel'
+                        || itemType === 'livetvprogram';
                 },
 
                 parseReasonNames: function(rawReasons) {
@@ -611,6 +637,10 @@
                     }
 
                     if (session.TranscodingInfo.IsVideoDirect === true) {
+                        return false;
+                    }
+
+                    if (this.excludeLiveTv && this.isLiveTvItem(session.NowPlayingItem)) {
                         return false;
                     }
 
@@ -727,6 +757,7 @@
                     document.getElementById('txtDelaySeconds').value = config.DelaySeconds || 5;
                     document.getElementById('txtMessageTimeout').value = config.MessageTimeoutMs || 10000;
                     document.getElementById('chkEnableLogging').checked = config.EnableLogging || false;
+                    document.getElementById('chkExcludeLiveTv').checked = config.ExcludeLiveTv === true;
                     document.getElementById('txtIncludedClientPatterns').value = ClientPatternEditor.formatPatterns(config.IncludedClientPatterns);
                     document.getElementById('txtExcludedClientPatterns').value = ClientPatternEditor.formatPatterns(config.ExcludedClientPatterns);
                     document.getElementById('chkEnableLoginNag').checked = config.EnableLoginNag !== false;
@@ -749,6 +780,7 @@
                     config.DelaySeconds = parseInt(document.getElementById('txtDelaySeconds').value);
                     config.MessageTimeoutMs = parseInt(document.getElementById('txtMessageTimeout').value);
                     config.EnableLogging = document.getElementById('chkEnableLogging').checked;
+                    config.ExcludeLiveTv = document.getElementById('chkExcludeLiveTv').checked;
                     config.IncludedClientPatterns = ClientPatternEditor.splitPatterns(document.getElementById('txtIncludedClientPatterns').value);
                     config.ExcludedClientPatterns = ClientPatternEditor.splitPatterns(document.getElementById('txtExcludedClientPatterns').value);
                     config.EnableLoginNag = document.getElementById('chkEnableLoginNag').checked;

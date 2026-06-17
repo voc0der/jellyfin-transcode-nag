@@ -1,4 +1,7 @@
+using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.TranscodeNag.Configuration;
+using Jellyfin.Plugin.TranscodeNag.Models;
+using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Session;
 
 namespace Jellyfin.Plugin.TranscodeNag.Tests;
@@ -89,6 +92,51 @@ public class TranscodeNagRulesTests
         Assert.False(TranscodeNagRules.IsClientAllowed("Jellyfin Android TV", config));
         Assert.False(TranscodeNagRules.IsClientAllowed("Chrome Web", config));
         Assert.False(TranscodeNagRules.IsClientAllowed(null, config));
+    }
+
+    [Fact]
+    public void IsLiveTvItem_DetectsLiveAndLiveTvItemTypes()
+    {
+        Assert.True(TranscodeNagRules.IsLiveTvItem(new BaseItemDto { IsLive = true, Type = BaseItemKind.Movie }));
+        Assert.True(TranscodeNagRules.IsLiveTvItem(new BaseItemDto { Type = BaseItemKind.TvChannel }));
+        Assert.True(TranscodeNagRules.IsLiveTvItem(new BaseItemDto { Type = BaseItemKind.LiveTvProgram }));
+        Assert.True(TranscodeNagRules.IsLiveTvItem(new BaseItemDto { Type = BaseItemKind.TvProgram }));
+        Assert.False(TranscodeNagRules.IsLiveTvItem(new BaseItemDto { Type = BaseItemKind.Movie }));
+        Assert.False(TranscodeNagRules.IsLiveTvItem(null));
+    }
+
+    [Fact]
+    public void IsItemAllowed_UsesLiveTvExclusionSetting()
+    {
+        var liveTvItem = new BaseItemDto { Type = BaseItemKind.TvChannel };
+
+        Assert.True(TranscodeNagRules.IsItemAllowed(liveTvItem, new PluginConfiguration()));
+        Assert.False(TranscodeNagRules.IsItemAllowed(
+            liveTvItem,
+            new PluginConfiguration { ExcludeLiveTv = true }));
+        Assert.True(TranscodeNagRules.IsItemAllowed(
+            new BaseItemDto { Type = BaseItemKind.Movie },
+            new PluginConfiguration { ExcludeLiveTv = true }));
+    }
+
+    [Fact]
+    public void IsStoredEventAllowed_AppliesClientAndLiveTvFilters()
+    {
+        var config = new PluginConfiguration
+        {
+            ExcludeLiveTv = true,
+            ExcludedClientPatterns = new[] { "android tv" }
+        };
+
+        Assert.True(TranscodeNagRules.IsStoredEventAllowed(
+            new TranscodeEvent { Client = "Jellyfin Web" },
+            config));
+        Assert.False(TranscodeNagRules.IsStoredEventAllowed(
+            new TranscodeEvent { Client = "Jellyfin Web", IsLiveTv = true },
+            config));
+        Assert.False(TranscodeNagRules.IsStoredEventAllowed(
+            new TranscodeEvent { Client = "Jellyfin Android TV" },
+            config));
     }
 
     [Fact]

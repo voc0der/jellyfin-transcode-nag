@@ -106,7 +106,38 @@ public class TranscodeEventStoreTests
         Assert.Equal("web-bad", events[0].ItemId);
     }
 
-    private static TranscodeEvent CreateEvent(string userId, NagEventKind kind, DateTime timestampUtc, string itemId, string client = "xUnit")
+    [Fact]
+    public async Task GetUserNagStatusAsync_CanFilterHistoryByLiveTvSetting()
+    {
+        using var harness = new StoreHarness();
+        var userId = Guid.NewGuid().ToString();
+        var config = new PluginConfiguration
+        {
+            ExcludeLiveTv = true
+        };
+
+        await harness.AddEventAsync(CreateEvent(userId, NagEventKind.BadTranscode, DateTime.UtcNow.AddDays(-4), "live-bad", isLiveTv: true));
+        await harness.AddEventAsync(CreateEvent(userId, NagEventKind.BadTranscode, DateTime.UtcNow.AddDays(-3), "movie-bad"));
+        await harness.AddEventAsync(CreateEvent(userId, NagEventKind.ImprovementCredit, DateTime.UtcNow.AddDays(-2), "live-credit", isLiveTv: true));
+        await harness.AddEventAsync(CreateEvent(userId, NagEventKind.NagSent, DateTime.UtcNow.AddDays(-1), "live-nag", isLiveTv: true));
+
+        var status = await harness.Store.GetUserNagStatusAsync(
+            userId,
+            7,
+            e => TranscodeNagRules.IsStoredEventAllowed(e, config));
+        var events = await harness.Store.GetUserEventsAsync(
+            userId,
+            7,
+            e => TranscodeNagRules.IsStoredEventAllowed(e, config));
+
+        Assert.Equal(1, status.BadTranscodeCount);
+        Assert.False(status.HasImprovementCredit);
+        Assert.False(status.NaggedRecently);
+        Assert.Single(events);
+        Assert.Equal("movie-bad", events[0].ItemId);
+    }
+
+    private static TranscodeEvent CreateEvent(string userId, NagEventKind kind, DateTime timestampUtc, string itemId, string client = "xUnit", bool isLiveTv = false)
     {
         return new TranscodeEvent
         {
@@ -117,6 +148,7 @@ public class TranscodeEventStoreTests
             Timestamp = timestampUtc,
             Reasons = kind == NagEventKind.BadTranscode ? MediaBrowser.Model.Session.TranscodeReason.VideoCodecNotSupported : 0,
             Client = client,
+            IsLiveTv = isLiveTv,
             Kind = kind
         };
     }

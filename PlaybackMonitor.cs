@@ -189,6 +189,12 @@ public class PlaybackMonitor : IHostedService
 
             var playbackKey = $"{session.Id}_{session.NowPlayingItem.Id}";
 
+            if (!IsItemAllowed(session, config, "playback nag"))
+            {
+                _naggedPlaybacks.Remove(playbackKey);
+                return;
+            }
+
             if (!IsClientAllowed(session, config, "playback nag"))
             {
                 _naggedPlaybacks.Remove(playbackKey);
@@ -250,6 +256,26 @@ public class PlaybackMonitor : IHostedService
 
         var userIdString = userId.Value.ToString("N");
         return Array.IndexOf(config.ExcludedUserIds, userIdString) >= 0;
+    }
+
+    private bool IsItemAllowed(SessionInfo session, Configuration.PluginConfiguration config, string context)
+    {
+        if (TranscodeNagRules.IsItemAllowed(session.NowPlayingItem, config))
+        {
+            return true;
+        }
+
+        if (config.EnableLogging)
+        {
+            _logger.LogInformation(
+                "Skipping {Context} for excluded Live TV item {ItemName} ({ItemId}) on session {SessionId}",
+                context,
+                session.NowPlayingItem?.Name ?? "Unknown",
+                session.NowPlayingItem?.Id.ToString() ?? "Unknown",
+                session.Id ?? "Unknown");
+        }
+
+        return false;
     }
 
     private bool IsClientAllowed(SessionInfo session, Configuration.PluginConfiguration config, string context)
@@ -486,6 +512,7 @@ public class PlaybackMonitor : IHostedService
             Timestamp = DateTime.UtcNow,
             Reasons = transcodeInfo.TranscodeReasons,
             Client = session.Client ?? "Unknown",
+            IsLiveTv = TranscodeNagRules.IsLiveTvItem(session.NowPlayingItem),
             Kind = NagEventKind.BadTranscode
         };
 
@@ -509,7 +536,7 @@ public class PlaybackMonitor : IHostedService
                 var status = await _eventStore.GetUserNagStatusAsync(
                     session.UserId.ToString(),
                     30,
-                    e => TranscodeNagRules.IsClientAllowed(e.Client, config)).ConfigureAwait(false);
+                    e => TranscodeNagRules.IsStoredEventAllowed(e, config)).ConfigureAwait(false);
 
                 if (!status.LastBadTranscodeUtc.HasValue)
                 {
@@ -531,6 +558,7 @@ public class PlaybackMonitor : IHostedService
                     Timestamp = DateTime.UtcNow,
                     Reasons = 0,
                     Client = session.Client ?? "Unknown",
+                    IsLiveTv = TranscodeNagRules.IsLiveTvItem(session.NowPlayingItem),
                     Kind = NagEventKind.ImprovementCredit
                 };
 
@@ -618,7 +646,7 @@ public class PlaybackMonitor : IHostedService
         var status = await _eventStore.GetUserNagStatusAsync(
             userId,
             days,
-            e => TranscodeNagRules.IsClientAllowed(e.Client, config)).ConfigureAwait(false);
+            e => TranscodeNagRules.IsStoredEventAllowed(e, config)).ConfigureAwait(false);
 
         // Rate limit: only once per configured period.
         if (status.NaggedRecently)

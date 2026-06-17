@@ -42,6 +42,7 @@ A Jellyfin plugin that intelligently nags users when they're transcoding due to 
 
 - Sends a playback nag when Jellyfin reports selected `TranscodeReasons`.
 - Ignores bitrate-only transcodes, so users lowering quality for bandwidth do not get warned.
+- Can exclude Live TV channel streams from playback nags and login nag history.
 - Can send a login nag when a user keeps hitting bad transcodes over the last week or month.
 - Lets you exclude users from all nags.
 - Includes a live session monitor in the plugin settings page.
@@ -78,6 +79,7 @@ Open **Dashboard** → **Plugins** → **Transcode Nag**.
 
 - Choose which playback transcode reasons should trigger nags. Defaults focus on unsupported container, codec, subtitle, profile, level, resolution, bit depth, framerate, and related compatibility failures.
 - Set the playback message, delay, and timeout.
+- Enable **Exclude Live TV** if Live TV channel streams should not trigger playback nags or count toward login nags.
 - Optionally add client include/exclude filters using case-insensitive text matching. If the include list is empty, all clients are eligible; exclude matches always win.
 - If you want login nags, enable them and set the threshold, time window, and message. The login message supports `{{transcodes}}` and `{{timewindow}}`.
 - Use **Manage Excluded Users** to opt users out of both playback and login nags.
